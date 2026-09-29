@@ -26,5 +26,5 @@ Medical Graduate | Web & Python Enthusiast | Indie Creator
 ### 📊 GitHub 動態統計
 
 <p align="center">
-  <img src="https://github-readme-stats.vercel.app/api?username=amalex0610&show_icons=true&theme=tokyonight&hide_border=true" alt="Alex's GitHub Stats" />
+  <img src="https://github-profile-trophy.vercel.app/?username=amalex0610&theme=dracula&no-frame=true&no-bg=true&margin-w=4" alt="Alex's GitHub Trophies" />
 </p>
