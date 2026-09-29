@@ -1,29 +1,32 @@
 # Hi there, I'm Alex! 👋
 
-Medical Graduate | Web & Python Enthusiast | Indie Creator  
-致力於將臨床思維、量化邏輯與有趣互動結合的獨立創作者。
+**Medical Graduate | Web & Python Enthusiast | Indie Creator**  
+致力於將臨床思維、量化邏輯與趣味互動完美結合的獨立創作者。
+這裡收錄了我為實況主與聊天室量身打造的系列黑色幽默互動網頁小品！
 
 ---
 
-### 🚀 焦點專案 / Featured Projects
+## 🚀 焦點專案 / Featured Projects
 
-- 🩺 **[急診當值：深更半夜 (ER Night Shift)](https://github.com/amalex0610/midnight-er)**  
-  專為實況開台設計的黑色幽默急診診療網頁小品！超大字體、防背題機制與死魚眼語音無情開噴。  
-  👉 **[線上直接試玩點這裡](https://amalex0610.github.io/midnight-er/)**
+### 1. 🥬 韭菜養成所：少年股神的一生 (Leek Stock Simulator)
+> **類型**：台股實況迷因生存模擬
+* **特色**：手握 100 萬本金進行 30 天單挑極速特訓。具備 60/40 巨浪盤面、三色動態心電圖（ECG）、營業員小美奪命追繳電話，以及滿滿圖奇風格的爆笑崩潰語音（TTS）與反市場盲選機制。
+* 👉 [**線上直接試玩點這裡**](#) *(請替換為你的 GitHub Pages 網址)*
 
----
-
-### 🛠️ 技術與工具 / Tech & Tools
-
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
-![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?style=for-the-badge&logo=githubpages&logoColor=white)
+### 2. 🩺 急診當值：深更半夜 (ER Night Shift)
+> **類型**：醫療黑色幽默模擬
+* **特色**：專為實況開台設計的診療網頁小品！擁有超大字體、防背題機制與死魚眼語音無情開噴的獨特體驗。
+* 👉 [**線上直接試玩點這裡**](#) *(請替換為你的 GitHub Pages 網址)*
 
 ---
 
-### 💬 交流與回饋
+## 🛠️ 技術與工具 / Tech & Tools
 
-- 🎮 **遊戲體驗回饋**：歡迎至專案倉庫點個 ⭐️ Star 或留下 Issue 建議！
-- 🩺 **醫學與程式跨界**：持續探索將臨床邏輯轉化為有趣互動專案的可能性。
+`JAVASCRIPT` `HTML5` `CSS3` `PYTHON` `GITHUB PAGES`
+
+---
+
+## 💬 交流與回饋 / Feedback & Community
+
+- 🎮 **遊戲體驗與玩後崩潰回饋**：歡迎至各專案倉庫點個 ⭐️ Star 或留下 Issue 建議！
+- 🩺 **醫學與程式跨界**：持續探索將各種真實場景（臨床診斷、金融市場）轉化為有趣互動網頁的無限可能。
