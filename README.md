@@ -23,8 +23,7 @@ Medical Graduate | Web & Python Enthusiast | Indie Creator
 
 ---
 
-### 📊 GitHub 動態統計
+### 💬 交流與回饋
 
-<p align="center">
-  <img src="https://github-profile-trophy.vercel.app/?username=amalex0610&theme=dracula&no-frame=true&no-bg=true&margin-w=4" alt="Alex's GitHub Trophies" />
-</p>
+- 🎮 **遊戲體驗回饋**：歡迎至專案倉庫點個 ⭐️ Star 或留下 Issue 建議！
+- 🩺 **醫學與程式跨界**：持續探索將臨床邏輯轉化為有趣互動專案的可能性。
