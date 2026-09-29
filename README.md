@@ -1,7 +1,7 @@
 # Hi there, I'm Alex! 👋
 
 **Medical Graduate | Web & Python Enthusiast | Indie Creator**  
-致力於將臨床思維、量化邏輯與趣味互動完美結合的獨立創作者。
+致力於將臨床思維、量化邏輯與趣味互動結合的獨立創作者。
 這裡收錄了我為實況主與聊天室量身打造的系列黑色幽默互動網頁小品！
 
 ---
