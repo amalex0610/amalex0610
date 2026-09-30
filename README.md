@@ -18,6 +18,12 @@
 * **特色**：專為實況開台設計的診療網頁小品！擁有超大字體、防背題機制與死魚眼語音無情開噴的獨特體驗。
 * <a href="https://amalex0610.github.io/midnight-er/" target="_blank">👉 <b>線上直接試玩點這裡</b>
 
+### 3. 🕵️ 荒謬大懸疑：實況現場 (Absurd Detective Live)
+
+> **類型**：實況互動黑色幽默推理解謎
+* **特色**：專為實況開台設計的互動網頁小品！擁有無厘頭四格漫畫推演、毒舌 1.5 倍速語音無情開噴、翻車記者會處刑與世界最高法院法官荒謬宣判的爆笑體驗。
+* <a href="https://amalex0610.github.io/absurd-detective-game/">👉 <b>線上直接試玩點這裡</b>
+
 ---
 
 ## 🛠️ 技術與工具 / Tech & Tools
