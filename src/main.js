@@ -1109,50 +1109,55 @@ function initMediaPipe() {
 
   handsTracker.onResults(onHandResults);
 
+  let isProcessingFrame = false;
   async function processVideoFrame() {
-    if (videoEl.readyState >= 2) {
-      await handsTracker.send({ image: videoEl });
+    if (videoEl.readyState >= 2 && !isProcessingFrame) {
+      isProcessingFrame = true;
+      try {
+        await handsTracker.send({ image: videoEl });
+      } catch (err) {
+        console.error("Frame tracking error:", err);
+      } finally {
+        isProcessingFrame = false;
+      }
     }
     requestAnimationFrame(processVideoFrame);
   }
   requestAnimationFrame(processVideoFrame);
 }
 
-// 處理手部追蹤與食指彈反
+// 處理手部追蹤與手勢判定
 function onHandResults(results) {
-  debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+  try {
+    debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
 
-  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-    isHandDetected = true;
-    const landmarks = results.multiHandLandmarks[0];
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      isHandDetected = true;
+      const landmarks = results.multiHandLandmarks[0];
 
-    const wrist = landmarks[0];
-    const indexMcp = landmarks[5];
-    const pinkyMcp = landmarks[17];
+      const wrist = landmarks[0];
+      const indexMcp = landmarks[5];
+      const pinkyMcp = landmarks[17];
 
-    let rawX = (wrist.x + indexMcp.x + pinkyMcp.x) / 3;
-    if (facingMode === 'user') rawX = 1.0 - rawX;
-    const rawY = (wrist.y + indexMcp.y + pinkyMcp.y) / 3;
-    const rawZ = (wrist.z + indexMcp.z + pinkyMcp.z) / 3;
+      let rawX = (wrist.x + indexMcp.x + pinkyMcp.x) / 3;
+      if (facingMode === 'user') rawX = 1.0 - rawX;
+      const rawY = (wrist.y + indexMcp.y + pinkyMcp.y) / 3;
+      const rawZ = (wrist.z + indexMcp.z + pinkyMcp.z) / 3;
 
-    palmScreenPos.x = rawX;
-    palmScreenPos.y = rawY;
+      palmScreenPos.x = rawX;
+      palmScreenPos.y = rawY;
 
-    const deltaZ = lastPalmZ - rawZ;
-    lastPalmZ = rawZ;
+      const deltaZ = lastPalmZ - rawZ;
+      lastPalmZ = rawZ;
 
-    const isFist = checkIsFist(landmarks);
-    const isPalmUp = !isFist && checkIsPalmUp(landmarks);
+      const isFist = checkIsFist(landmarks);
+      const isPalmUp = !isFist && checkIsPalmUp(landmarks);
 
-    // 1. 食指彈反光波 (Index Finger Deflect)
-    const indexTipPos = getLandmarkCameraPos(landmarks[8]);
-    const indexTipDist = lastIndexWorldPos.distanceTo(indexTipPos);
-    indexVelocity = indexTipDist / 0.033; // 約每幀速度 m/s
-    // 2. 中指指向瞄準
-    if (!isFist) {
-      const rawAimDir = computeMiddleFingerAimDirection(landmarks);
-      targetAimDir.copy(rawAimDir);
-    }
+      // 1. 中指指向瞄準
+      if (!isFist) {
+        const rawAimDir = computeMiddleFingerAimDirection(landmarks);
+        targetAimDir.copy(rawAimDir);
+      }
 
     const pPos = getPalmWorldPosition();
 
@@ -1214,6 +1219,9 @@ function onHandResults(results) {
     statusEl.textContent = "等待手掌進入視野...";
     guideIconEl.textContent = "🖐️";
     guideTextEl.textContent = "請將手伸到鏡頭前，掌心向上聚氣";
+  }
+  } catch (err) {
+    console.error("onHandResults error:", err);
   }
 }
 
