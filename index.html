@@ -31,6 +31,14 @@
         <span class="kienzan-icon">💿</span> <span class="kienzan-text">氣圓斬！一刀兩斷！</span>
       </div>
 
+      <!-- ⚡ 神極共鳴貫穿砲發動浮動橫幅 -->
+      <div id="resonance-banner" class="hidden">
+        <span class="resonance-icon">⚡</span> <span class="resonance-text">神極共鳴貫穿砲！全場貫穿蒸發！</span>
+      </div>
+
+      <!-- ⚡ 全螢幕邊緣共鳴電光氣焰覆蓋層 -->
+      <div id="resonance-overlay"></div>
+
       <!-- UI HUD 介面 -->
       <div id="hud-overlay">
         <!-- 頂部資訊列 -->
@@ -94,6 +102,15 @@
           <div class="reticle-ring"></div>
           <div class="reticle-dot"></div>
         </div>
+
+        <!-- ⚡ 拇指雙重共鳴奧義鈕 (一手持機，拇指長按引發共鳴) -->
+        <button id="btn-resonance" class="resonance-btn" title="一手持機時，拇指按住引發雙重共鳴！">
+          <div class="resonance-ring-glow"></div>
+          <div class="resonance-core">
+            <span class="resonance-icon">⚡</span>
+            <span class="resonance-label">神極共鳴</span>
+          </div>
+        </button>
 
         <!-- 底部控制與能量條 -->
         <footer class="hud-footer">
@@ -168,9 +185,14 @@
               <p>鎖定目標後，張開手掌用力<b>向前一推（出掌）</b>，弧形追蹤雷射齊射而出，自動追尾轟殺全場！</p>
             </div>
             <div class="t-section highlight-t-section">
-              <div class="t-badge gold-badge">奧義</div>
+              <div class="t-badge gold-badge">奧義 1</div>
               <h3>💿 必殺・氣圓斬：一刀兩斷！</h3>
               <p>當能量集滿 80% 變成黃金光輪時，手掌做出快速<b>揮砍劈下（手刀）</b>，高速氣圓斬將直接把敵人<b>劈成兩半</b>爆裂！</p>
+            </div>
+            <div class="t-section highlight-t-section resonance-section">
+              <div class="t-badge cyan-badge">奧義 2</div>
+              <h3>⚡ 拇指共鳴・神極能量砲！</h3>
+              <p>一隻手拿手機，<b>握手機的拇指長按右下角【⚡ 神極共鳴】</b>，另一手在鏡頭前推掌，即可釋放<b>貫穿全場敵機</b>的毀滅級超粗能量神砲！</p>
             </div>
             <div class="t-section">
               <div class="t-badge">貼心功能</div>
@@ -186,7 +208,7 @@
       <div id="start-overlay">
         <div class="start-card">
           <h1>⚡ AR 氣功破 ⚡</h1>
-          <p class="subtitle">全 10 關史詩戰役 ＆ 必殺氣圓斬參戰！</p>
+          <p class="subtitle">全 10 關史詩戰役 ＆ 雙重共鳴神砲參戰！</p>
           <div class="instructions">
             <div class="step-item">
               <span class="step-num">1</span>
@@ -207,6 +229,10 @@
             <div class="step-item highlight-step">
               <span class="step-num">💿</span>
               <span><b>必殺氣圓斬</b>：能量滿時<b>手刀揮砍</b>，一刀兩斷！</span>
+            </div>
+            <div class="step-item highlight-step resonance-step">
+              <span class="step-num">⚡</span>
+              <span><b>拇指共鳴奧義</b>：拇指按住<b>【⚡ 共鳴】</b>＋推掌發射全屏貫穿神砲！</span>
             </div>
           </div>
 

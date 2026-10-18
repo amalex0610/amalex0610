@@ -424,6 +424,99 @@ class SoundSynthesizer {
     }
     return !this.bgmMuted;
   }
+
+  // ==========================================
+  // ⚡ 拇指共鳴音效合成 (重低音共振與毀滅神極砲)
+  // ==========================================
+  startResonanceHum() {
+    if (!this.ctx) return;
+    if (!this.resOsc) {
+      const t = this.ctx.currentTime;
+      this.resOsc = this.ctx.createOscillator();
+      this.resGain = this.ctx.createGain();
+      const resFilter = this.ctx.createBiquadFilter();
+
+      this.resOsc.type = 'sawtooth';
+      this.resOsc.frequency.setValueAtTime(65, t);
+      this.resOsc.frequency.exponentialRampToValueAtTime(140, t + 1.2);
+
+      resFilter.type = 'lowpass';
+      resFilter.frequency.setValueAtTime(300, t);
+      resFilter.frequency.exponentialRampToValueAtTime(1800, t + 1.2);
+
+      this.resGain.gain.setValueAtTime(0.01, t);
+      this.resGain.gain.linearRampToValueAtTime(0.28, t + 0.2);
+
+      this.resOsc.connect(resFilter);
+      resFilter.connect(this.resGain);
+      this.resGain.connect(this.ctx.destination);
+
+      this.resOsc.start(t);
+      this.isResonatingHum = true;
+    }
+  }
+
+  stopResonanceHum() {
+    if (this.resOsc && this.ctx) {
+      const t = this.ctx.currentTime;
+      try {
+        this.resGain.gain.linearRampToValueAtTime(0.001, t + 0.1);
+        setTimeout(() => {
+          if (this.resOsc) {
+            try { this.resOsc.stop(); } catch (e) {}
+            this.resOsc.disconnect();
+            this.resOsc = null;
+          }
+          this.isResonatingHum = false;
+        }, 110);
+      } catch (e) {}
+    }
+  }
+
+  // ⚡ 神極共鳴貫穿砲發射巨響 (毀滅級次重低音 + 閃電狂嘯)
+  playResonanceCannon() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // 1. 次重低音地震震波
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(130, t);
+    subOsc.frequency.exponentialRampToValueAtTime(28, t + 0.85);
+    subGain.gain.setValueAtTime(0.65, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(t);
+    subOsc.stop(t + 0.9);
+
+    // 2. 超高能電弧裂帛音
+    const sawOsc = this.ctx.createOscillator();
+    const sawGain = this.ctx.createGain();
+    sawOsc.type = 'sawtooth';
+    sawOsc.frequency.setValueAtTime(1200, t);
+    sawOsc.frequency.exponentialRampToValueAtTime(80, t + 0.7);
+    sawGain.gain.setValueAtTime(0.45, t);
+    sawGain.gain.exponentialRampToValueAtTime(0.005, t + 0.75);
+    sawOsc.connect(sawGain);
+    sawGain.connect(this.ctx.destination);
+    sawOsc.start(t);
+    sawOsc.stop(t + 0.75);
+
+    // 3. 破壞光束持續震盪
+    const noiseOsc = this.ctx.createOscillator();
+    const noiseGain = this.ctx.createGain();
+    noiseOsc.type = 'triangle';
+    noiseOsc.frequency.setValueAtTime(260, t);
+    noiseOsc.frequency.linearRampToValueAtTime(520, t + 0.4);
+    noiseGain.gain.setValueAtTime(0.35, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+    noiseOsc.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noiseOsc.start(t);
+    noiseOsc.stop(t + 0.85);
+  }
 }
 
 const sound = new SoundSynthesizer();
@@ -463,6 +556,22 @@ const btnStartMenuTutorial = document.getElementById('btn-start-menu-tutorial');
 const btnCloseTutorial = document.getElementById('btn-close-tutorial');
 const btnTutorialGotIt = document.getElementById('btn-tutorial-got-it');
 const tutorialModal = document.getElementById('tutorial-modal');
+
+// ⚡ 拇指共鳴奧義與震屏 UI
+const hudOverlay = document.getElementById('hud-overlay');
+const btnResonance = document.getElementById('btn-resonance');
+const resonanceOverlay = document.getElementById('resonance-overlay');
+const resonanceBanner = document.getElementById('resonance-banner');
+let isResonating = false;
+
+// 觸發打擊震屏特效 (Screen Shake)
+function triggerScreenShake() {
+  if (!hudOverlay) return;
+  hudOverlay.classList.remove('screen-shake');
+  void hudOverlay.offsetWidth;
+  hudOverlay.classList.add('screen-shake');
+  setTimeout(() => hudOverlay.classList.remove('screen-shake'), 360);
+}
 
 const gameResultOverlay = document.getElementById('game-result-overlay');
 const resultTitle = document.getElementById('result-title');
@@ -1436,19 +1545,65 @@ function checkStageCompletion() {
 // 8. 氣功波發射判定 (支援單發與分裂齊射)
 // ==========================================
 function fireKiBlast() {
-  if (chargeLevel < 0.15 && lockedTargets.length === 0 && !isFiring) {
-    guideTextEl.textContent = "氣力不足！請先掌心向上托天蓄力";
+  if (chargeLevel < 0.15 && lockedTargets.length === 0 && !isFiring && !isResonating) {
+    guideTextEl.textContent = "氣力不足！請先掌心向上托天蓄力，或按住【⚡ 共鳴】";
     return;
   }
 
   isFiring = true;
-  beamDuration = 0.55;
   sound.stopChargeHum();
 
   const palmWorldPos = getPalmWorldPosition();
+  const shootDir = smoothedAimDir.clone().normalize();
 
-  if (lockedTargets.length > 0) {
+  if (isResonating) {
+    // 【⚡ 雙重共鳴・神極能量砲 (Giga Resonance Cannon)】
+    sound.stopResonanceHum();
+    sound.playResonanceCannon();
+    triggerScreenShake();
+    if (navigator.vibrate) navigator.vibrate([120, 50, 180, 50, 250]);
+
+    // 顯示超大震撼橫幅
+    if (resonanceBanner) {
+      resonanceBanner.classList.remove('hidden');
+      setTimeout(() => resonanceBanner.classList.add('hidden'), 950);
+    }
+
+    beamDuration = 0.85; // 延遲超長光束持續時間
+    beamGroup.position.copy(palmWorldPos);
+    beamGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), shootDir);
+    beamGroup.scale.set(3.2, 3.2, 1.25); // 巨型 3.2 倍粗壯毀滅光柱！
+    beamCore.material.color.setHex(0xffffff);
+    beamOuter.material.color.setHex(0x00f7ff);
+    beamGroup.visible = true;
+
+    // ⚡ 貫穿全場敵機判定 (大半徑圓柱檢測，傷害高達 30，一擊蒸發群怪！)
+    const hitTargets = [];
+    targets.forEach(t => {
+      const toTarget = new THREE.Vector3().subVectors(t.position, palmWorldPos);
+      const projDist = toTarget.dot(shootDir);
+      if (projDist > 0) {
+        const closestPoint = new THREE.Vector3().copy(palmWorldPos).addScaledVector(shootDir, projDist);
+        const dist = closestPoint.distanceTo(t.position);
+        if (dist < t.userData.radius + 1.25) {
+          hitTargets.push({ target: t, dist: projDist, hitPoint: closestPoint });
+        }
+      }
+    });
+
+    guideTextEl.textContent = `⚡ 神極共鳴貫穿砲！全場貫穿轟殺 ${hitTargets.length} 體目標！`;
+    hitTargets.forEach(hit => {
+      destroyTarget(hit.target, hit.hitPoint, shootDir, 30); // 30 點毀滅級全場貫穿傷害
+    });
+
+    // 射出後暫時重置共鳴狀態
+    isResonating = false;
+    btnResonance.classList.remove('active');
+    resonanceOverlay.classList.remove('active');
+  } else if (lockedTargets.length > 0) {
     // 【多重分裂導引雷射齊射！】
+    beamDuration = 0.55;
+    beamGroup.scale.set(1.0, 1.0, 1.0);
     guideTextEl.textContent = `⚡ 全彈齊射！發射 ${lockedTargets.length} 道追蹤雷射！`;
     const targetsToHit = [...lockedTargets];
     lockedTargets = [];
@@ -1456,9 +1611,10 @@ function fireKiBlast() {
     launchHomingMissiles(palmWorldPos, targetsToHit);
   } else {
     // 【單發直射模式】
+    beamDuration = 0.55;
+    beamGroup.scale.set(1.0, 1.0, 1.0);
     sound.playBeamBlast();
     beamGroup.position.copy(palmWorldPos);
-    const shootDir = smoothedAimDir.clone().normalize();
     beamGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), shootDir);
     beamGroup.visible = true;
 
@@ -1702,8 +1858,14 @@ function onHandResults(results) {
           guideIconEl.textContent = "💿";
           guideTextEl.textContent = "高速旋轉氣圓斬破空而出！將敵人徹底切成兩半！";
         }
-        // 狀態 A：掌心向上聚氣
-        else if (isPalmUp) {
+        // 狀態 A：掌心向上聚氣或拇指共鳴超載聚氣
+        if (isResonating) {
+          chargeLevel = Math.min(1.0, chargeLevel + 0.04);
+          updateChargeUI();
+          statusEl.textContent = `⚡ 雙重共鳴超載中 (${Math.round(chargeLevel * 100)}%)！向前推掌釋放神極砲！`;
+          guideIconEl.textContent = "⚡";
+          guideTextEl.textContent = "雙重共鳴超載蓄力中！向前推掌釋放毀滅級神極貫穿砲！";
+        } else if (isPalmUp) {
           chargeLevel = Math.min(1.0, chargeLevel + 0.025);
           updateChargeUI();
           sound.startChargeHum(chargeLevel);
@@ -1739,14 +1901,14 @@ function onHandResults(results) {
           }
         }
 
-        // 狀態 C：出掌齊射
+        // 狀態 C：出掌齊射 (包含共鳴神極砲、多重齊射、普通直射)
         if (wasFistState && !isFist && !isPalmUp) {
-          if (lockedTargets.length > 0 || chargeLevel >= 0.15) {
+          if (lockedTargets.length > 0 || chargeLevel >= 0.15 || isResonating) {
             fireKiBlast();
           }
-        } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35)) {
+        } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35 || isResonating)) {
           fireKiBlast();
-        } else if (!isFist && !isPalmUp && lockedTargets.length === 0) {
+        } else if (!isFist && !isPalmUp && lockedTargets.length === 0 && !isResonating) {
           if (chargeLevel >= 0.80) {
             statusEl.textContent = "💿 氣圓斬蓄勢待發！請揮掌劈砍！";
             guideIconEl.textContent = "🔪";
@@ -1812,26 +1974,32 @@ function animate() {
     kiGroup.position.copy(pPos);
     kiGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), smoothedAimDir);
 
-    const scale = 0.5 + chargeLevel * 1.5;
-    kiGroup.scale.set(scale, scale, scale);
-
-    // 集滿 80% 以上時，掌心聚氣球變成黃金氣圓斬高速旋刃狀態！
-    if (chargeLevel >= 0.80) {
+    let scale = 0.5 + chargeLevel * 1.5;
+    if (isResonating) {
+      scale *= 1.85; // 共鳴超載膨脹 1.85 倍
+      orbMesh.material.color.setHex(0x00f7ff);
+      ringMesh1.scale.set(2.2, 2.2, 2.2);
+      ringMesh1.rotation.z += delta * 28;
+      ringMesh2.scale.set(1.8, 1.8, 1.8);
+      ringMesh2.rotation.z -= delta * 24;
+      kiLight.intensity = Math.max(8, chargeLevel * 15);
+    } else if (chargeLevel >= 0.80) {
       orbMesh.material.color.setHex(0xffe600);
       ringMesh1.scale.set(1.6, 1.6, 1.6);
       ringMesh1.rotation.z += delta * 22;
+      ringMesh2.scale.set(1.0, 1.0, 1.0);
+      kiLight.intensity = chargeLevel * 6;
     } else {
       orbMesh.material.color.setHex(0x00ffff);
       ringMesh1.scale.set(1.0, 1.0, 1.0);
+      ringMesh2.scale.set(1.0, 1.0, 1.0);
       ringMesh1.rotation.x += delta * 4;
       ringMesh1.rotation.y += delta * 3;
+      kiLight.intensity = chargeLevel * 6;
     }
-    ringMesh2.rotation.y -= delta * 5;
-    ringMesh2.rotation.z += delta * 4;
-    kiParticles.rotation.y += delta * 2;
+    kiParticles.rotation.y += delta * (isResonating ? 6 : 2);
 
     kiLight.position.copy(pPos);
-    kiLight.intensity = chargeLevel * 6;
 
     aimLine.visible = true;
     const lineEnd = new THREE.Vector3().copy(pPos).addScaledVector(smoothedAimDir, 14.0);
@@ -1839,7 +2007,7 @@ function animate() {
     posArr[0] = pPos.x; posArr[1] = pPos.y; posArr[2] = pPos.z;
     posArr[3] = lineEnd.x; posArr[4] = lineEnd.y; posArr[5] = lineEnd.z;
     aimLine.geometry.attributes.position.needsUpdate = true;
-    aimLine.material.opacity = 0.25 + chargeLevel * 0.65;
+    aimLine.material.opacity = isResonating ? 0.95 : (0.25 + chargeLevel * 0.65);
 
     // 準心直接貼合掌心在螢幕上的位置（像滑鼠游標一樣指哪打哪）
     const screenX = palmScreenPos.x * window.innerWidth;
@@ -1860,6 +2028,9 @@ function animate() {
     if (beamDuration <= 0) {
       isFiring = false;
       beamGroup.visible = false;
+      beamGroup.scale.set(1.0, 1.0, 1.0); // 恢復常規尺寸
+      beamCore.material.color.setHex(0xffffff);
+      beamOuter.material.color.setHex(0x00f7ff);
     } else {
       beamCore.scale.x = 1.0 + Math.sin(elapsedTime * 60) * 0.3;
       beamCore.scale.z = 1.0 + Math.cos(elapsedTime * 60) * 0.3;
@@ -2077,6 +2248,36 @@ btnOpenTutorial.addEventListener('click', openTutorialModal);
 btnStartMenuTutorial.addEventListener('click', openTutorialModal);
 btnCloseTutorial.addEventListener('click', closeTutorialModal);
 btnTutorialGotIt.addEventListener('click', closeTutorialModal);
+
+// ⚡ 拇指共鳴奧義按鈕事件監聽 (長按激活共鳴，放開解除)
+if (btnResonance) {
+  const startResonance = (e) => {
+    e.preventDefault();
+    isResonating = true;
+    btnResonance.classList.add('active');
+    if (resonanceOverlay) resonanceOverlay.classList.add('active');
+    sound.startResonanceHum();
+    if (navigator.vibrate) navigator.vibrate(60);
+    statusEl.textContent = "⚡ 雙重共鳴激活中！另一手推掌發射「神極貫穿砲」！";
+    guideIconEl.textContent = "⚡";
+    guideTextEl.textContent = "雙重共鳴啟動！向前推掌，發射全屏貫穿毀滅神極砲！";
+  };
+
+  const stopResonance = (e) => {
+    e.preventDefault();
+    if (!isFiring) {
+      isResonating = false;
+      btnResonance.classList.remove('active');
+      if (resonanceOverlay) resonanceOverlay.classList.remove('active');
+      sound.stopResonanceHum();
+    }
+  };
+
+  btnResonance.addEventListener('pointerdown', startResonance);
+  btnResonance.addEventListener('pointerup', stopResonance);
+  btnResonance.addEventListener('pointercancel', stopResonance);
+  btnResonance.addEventListener('pointerleave', stopResonance);
+}
 
 // 手動發射按鈕
 document.getElementById('btn-fire').addEventListener('click', () => {

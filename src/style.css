@@ -933,3 +933,169 @@ html, body {
   background: rgba(255, 215, 0, 0.06);
 }
 
+.cyan-badge {
+  background: rgba(0, 247, 255, 0.28);
+  color: #00f7ff;
+}
+
+.resonance-section {
+  border-color: rgba(0, 247, 255, 0.6) !important;
+  background: rgba(0, 247, 255, 0.08) !important;
+}
+
+.resonance-step {
+  border-color: rgba(0, 247, 255, 0.6) !important;
+}
+
+/* ⚡ 雙重共鳴全螢幕邊緣電光氣焰覆蓋層 */
+#resonance-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-shadow: inset 0 0 50px rgba(0, 247, 255, 0.8), inset 0 0 100px rgba(255, 230, 0, 0.5);
+  pointer-events: none;
+  z-index: 45;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+#resonance-overlay.active {
+  opacity: 1;
+  animation: pulse-resonance 0.35s infinite alternate ease-in-out;
+}
+
+@keyframes pulse-resonance {
+  from {
+    box-shadow: inset 0 0 45px rgba(0, 247, 255, 0.7), inset 0 0 80px rgba(255, 200, 0, 0.4);
+  }
+  to {
+    box-shadow: inset 0 0 85px rgba(0, 247, 255, 0.95), inset 0 0 140px rgba(255, 230, 0, 0.8);
+  }
+}
+
+/* 震屏打擊動畫 (Screen Shake) */
+.screen-shake {
+  animation: screen-shake-anim 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes screen-shake-anim {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-8px, 6px); }
+  40% { transform: translate(7px, -6px); }
+  60% { transform: translate(-5px, 4px); }
+  80% { transform: translate(4px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ⚡ 神極共鳴貫穿砲發動橫幅 */
+#resonance-banner {
+  position: absolute;
+  top: 32%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.1);
+  background: linear-gradient(135deg, rgba(0, 247, 255, 0.96), rgba(255, 230, 0, 0.96));
+  color: #051020;
+  font-weight: 900;
+  font-size: 20px;
+  padding: 12px 28px;
+  border-radius: 35px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 40px #00f7ff, 0 0 70px #ffe600;
+  z-index: 75;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  animation: resonance-pop 0.9s ease-out forwards;
+}
+
+@keyframes resonance-pop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  18% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  75% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -75%) scale(0.85); opacity: 0; }
+}
+
+/* ⚡ 拇指共鳴按鈕 (右側浮動圓鈕，單手握持拇指專用) */
+.resonance-btn {
+  position: absolute;
+  bottom: 125px;
+  right: 16px;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: rgba(10, 25, 45, 0.88);
+  border: 2px solid #00f7ff;
+  box-shadow: 0 0 20px rgba(0, 247, 255, 0.5), inset 0 0 15px rgba(0, 247, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 40;
+  transition: all 0.15s ease-out;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.resonance-btn .resonance-icon {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px #00f7ff);
+}
+
+.resonance-btn .resonance-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #00f7ff;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  text-shadow: 0 0 6px rgba(0, 247, 255, 0.8);
+}
+
+.resonance-ring-glow {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border-radius: 50%;
+  border: 2px dashed rgba(0, 247, 255, 0.6);
+  animation: spin-glow 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin-glow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 拇指按住時共鳴狀態激發 */
+.resonance-btn:active,
+.resonance-btn.active {
+  transform: scale(1.12);
+  background: linear-gradient(135deg, #00f7ff 0%, #ffe600 100%);
+  border-color: #ffffff;
+  box-shadow: 0 0 35px #00f7ff, 0 0 60px #ffe600;
+}
+
+.resonance-btn:active .resonance-label,
+.resonance-btn.active .resonance-label {
+  color: #000;
+  font-weight: 900;
+  text-shadow: none;
+}
+
+.resonance-btn:active .resonance-ring-glow,
+.resonance-btn.active .resonance-ring-glow {
+  border-color: #ffe600;
+  animation-duration: 1.2s;
+}
+
