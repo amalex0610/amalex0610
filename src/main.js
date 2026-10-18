@@ -1190,167 +1190,637 @@ function spawnEnemyProjectile(fromPos) {
   });
 }
 
-// 生成各種類型的敵人
+// ==========================================
+// 6.1 精緻科幻戰艦 3D 模型建構器 (Procedural Sci-Fi Warships)
+// ==========================================
+
+// 1. 【機動浮游戰機 (Scout Drone)】
+function createDroneShip() {
+  const ship = new THREE.Group();
+  
+  // 主機身流線梭形
+  const bodyGeo = new THREE.CylinderGeometry(0.12, 0.22, 0.65, 6);
+  bodyGeo.rotateX(Math.PI / 2);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x1f2430,
+    metalness: 0.85,
+    roughness: 0.25,
+    emissive: 0x220510,
+    emissiveIntensity: 0.4
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  ship.add(body);
+
+  // 駕駛/感應紅外熱能單眼 (Cyclops Visor)
+  const eyeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+  const eye = new THREE.Mesh(eyeGeo, eyeMat);
+  eye.position.set(0, 0.04, 0.3);
+  ship.add(eye);
+
+  // 左右斜掠翼 (Swept-back Cyber Wings)
+  for (let side of [-1, 1]) {
+    const wingGeo = new THREE.BoxGeometry(0.32, 0.025, 0.28);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: 0x334455,
+      metalness: 0.9,
+      roughness: 0.3
+    });
+    const wing = new THREE.Mesh(wingGeo, wingMat);
+    wing.position.set(side * 0.32, 0, -0.05);
+    wing.rotation.y = side * 0.25;
+    wing.rotation.z = side * 0.12;
+    ship.add(wing);
+
+    // 翼尖高能電漿發射管 (Wingtip Cannons)
+    const gunGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.28, 8);
+    gunGeo.rotateX(Math.PI / 2);
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
+    const gun = new THREE.Mesh(gunGeo, gunMat);
+    gun.position.set(side * 0.48, 0, 0.05);
+    ship.add(gun);
+
+    // 翼尖微型光能噴嘴
+    const tipGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00f7ff })
+    );
+    tipGlow.position.set(side * 0.48, 0, 0.2);
+    ship.add(tipGlow);
+  }
+
+  // 尾部離子推進器 (Ion Engine Nozzle & Plume)
+  const nozzleGeo = new THREE.CylinderGeometry(0.09, 0.13, 0.16, 12);
+  nozzleGeo.rotateX(Math.PI / 2);
+  const nozzleMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9 });
+  const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+  nozzle.position.set(0, 0, -0.36);
+  ship.add(nozzle);
+
+  const plumeGeo = new THREE.ConeGeometry(0.08, 0.32, 8);
+  plumeGeo.rotateX(-Math.PI / 2);
+  const plumeMat = new THREE.MeshBasicMaterial({
+    color: 0x00f7ff,
+    transparent: true,
+    opacity: 0.85
+  });
+  const plume = new THREE.Mesh(plumeGeo, plumeMat);
+  plume.position.set(0, 0, -0.56);
+  ship.add(plume);
+
+  // 環繞防護光環
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.48, 0.015, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0x00f7ff, transparent: true, opacity: 0.65 })
+  );
+  ship.add(ring);
+  ship.userData.rotRing = ring;
+
+  return ship;
+}
+
+// 2. 【疾速僚機 (Vector Interceptor)】
+function createSpeedyShip() {
+  const ship = new THREE.Group();
+
+  // 尖銳箭型主機身 (Needle Fuselage)
+  const noseGeo = new THREE.ConeGeometry(0.16, 0.95, 4);
+  noseGeo.rotateX(Math.PI / 2);
+  const noseMat = new THREE.MeshStandardMaterial({
+    color: 0x0a1e28,
+    metalness: 0.95,
+    roughness: 0.12,
+    emissive: 0x004455,
+    emissiveIntensity: 0.5
+  });
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  ship.add(nose);
+
+  // 座艙光感塗層
+  const canopyGeo = new THREE.CylinderGeometry(0.06, 0.1, 0.35, 4);
+  canopyGeo.rotateX(Math.PI / 2);
+  const canopyMat = new THREE.MeshBasicMaterial({ color: 0x00f7ff });
+  const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+  canopy.position.set(0, 0.08, 0.08);
+  ship.add(canopy);
+
+  // 前掠匿蹤雙翼 (Forward-swept Wings)
+  for (let side of [-1, 1]) {
+    const wingGeo = new THREE.BoxGeometry(0.42, 0.02, 0.22);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: 0x007788,
+      metalness: 0.9,
+      roughness: 0.2
+    });
+    const wing = new THREE.Mesh(wingGeo, wingMat);
+    wing.position.set(side * 0.32, 0, 0.1);
+    wing.rotation.y = -side * 0.45; // 前掠翼角
+    wing.rotation.z = side * 0.15;
+    ship.add(wing);
+
+    // 垂直翼端安定翼 (Vertical Stabilizers)
+    const finGeo = new THREE.BoxGeometry(0.02, 0.18, 0.15);
+    const fin = new THREE.Mesh(finGeo, wingMat);
+    fin.position.set(side * 0.52, 0.06, 0.18);
+    ship.add(fin);
+  }
+
+  // 雙聯超導高壓電漿砲管 (Dual Plasma Lances)
+  for (let side of [-1, 1]) {
+    const lanceGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.6, 8);
+    lanceGeo.rotateX(Math.PI / 2);
+    const lanceMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+    const lance = new THREE.Mesh(lanceGeo, lanceMat);
+    lance.position.set(side * 0.12, -0.02, 0.32);
+    ship.add(lance);
+  }
+
+  // 雙發極速噴射尾焰 (Twin Turbo Jet Exhaust)
+  for (let side of [-1, 1]) {
+    const jetPlumeGeo = new THREE.ConeGeometry(0.06, 0.36, 8);
+    jetPlumeGeo.rotateX(-Math.PI / 2);
+    const jetPlumeMat = new THREE.MeshBasicMaterial({
+      color: 0x39ff14,
+      transparent: true,
+      opacity: 0.9
+    });
+    const jetPlume = new THREE.Mesh(jetPlumeGeo, jetPlumeMat);
+    jetPlume.position.set(side * 0.08, 0, -0.62);
+    ship.add(jetPlume);
+  }
+
+  // 旋轉動能光環
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.44, 0.014, 8, 24),
+    new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.85 })
+  );
+  ship.add(ring);
+  ship.userData.rotRing = ring;
+
+  return ship;
+}
+
+// 3. 【重裝護甲艦 (Bastion Heavy Cruiser)】
+function createArmoredShip() {
+  const ship = new THREE.Group();
+
+  // 沉重厚實的主裝甲艦體 (Heavy Hex Core)
+  const coreGeo = new THREE.DodecahedronGeometry(0.42, 0);
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0x331100,
+    roughness: 0.35,
+    metalness: 0.88,
+    emissive: 0x441100,
+    emissiveIntensity: 0.6
+  });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  ship.add(core);
+
+  // 左右側重型裝甲浮箱 (Armored Sponsons)
+  for (let side of [-1, 1]) {
+    const sponsonGeo = new THREE.BoxGeometry(0.24, 0.32, 0.65);
+    const sponsonMat = new THREE.MeshStandardMaterial({
+      color: 0xff4400,
+      metalness: 0.9,
+      roughness: 0.3
+    });
+    const sponson = new THREE.Mesh(sponsonGeo, sponsonMat);
+    sponson.position.set(side * 0.45, 0, 0);
+    ship.add(sponson);
+
+    // 裝甲側散熱光條
+    const ventGeo = new THREE.PlaneGeometry(0.05, 0.5);
+    const ventMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, side: THREE.DoubleSide });
+    const vent = new THREE.Mesh(ventGeo, ventMat);
+    vent.position.set(side * 0.58, 0, 0);
+    vent.rotation.y = side * Math.PI / 2;
+    ship.add(vent);
+  }
+
+  // 背部雙聯重型攻城加農砲 (Dual Heavy Siege Turrets)
+  for (let side of [-1, 1]) {
+    const barrelGeo = new THREE.CylinderGeometry(0.042, 0.05, 0.55, 8);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.95 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(side * 0.16, 0.28, 0.2);
+    ship.add(barrel);
+
+    // 砲口能量聚集圈
+    const muzzleGeo = new THREE.RingGeometry(0.03, 0.065, 8);
+    const muzzleMat = new THREE.MeshBasicMaterial({ color: 0xff5500, side: THREE.DoubleSide });
+    const muzzle = new THREE.Mesh(muzzleGeo, muzzleMat);
+    muzzle.position.set(side * 0.16, 0.28, 0.48);
+    ship.add(muzzle);
+  }
+
+  // 中央重力聚能反應爐 (Fusion Reactor Core)
+  const reactorGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.12, 16);
+  const reactorMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+  const reactor = new THREE.Mesh(reactorGeo, reactorMat);
+  reactor.rotation.x = Math.PI / 2;
+  reactor.position.set(0, 0, 0.38);
+  ship.add(reactor);
+
+  // 雙層重裝防護力場光圈 (Heavy Forcefield Rings)
+  const shieldRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.72, 0.028, 12, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 })
+  );
+  ship.add(shieldRing);
+  ship.userData.rotRing = shieldRing;
+
+  return ship;
+}
+
+// 4. 【黃金精英獵鷹 (Apex Elite Fighter)】
+function createEliteShip() {
+  const ship = new THREE.Group();
+
+  // 霸氣修長的主機身 (Apex Main Fuselage)
+  const bodyGeo = new THREE.CylinderGeometry(0.08, 0.22, 1.05, 6);
+  bodyGeo.rotateX(Math.PI / 2);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x241d06,
+    metalness: 0.95,
+    roughness: 0.15,
+    emissive: 0x553300,
+    emissiveIntensity: 0.6
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  ship.add(body);
+
+  // 黃金指揮座艙 (Golden Command Canopy)
+  const canopyGeo = new THREE.SphereGeometry(0.13, 16, 12);
+  const canopyMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+  canopy.position.set(0, 0.1, 0.12);
+  canopy.scale.set(0.9, 0.7, 1.8);
+  ship.add(canopy);
+
+  // 雙層海鷗掠翼 (Dual Stage Gull Wings)
+  for (let side of [-1, 1]) {
+    // 內翼
+    const inWingGeo = new THREE.BoxGeometry(0.38, 0.025, 0.28);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: 0xffaa00,
+      metalness: 0.9,
+      roughness: 0.2
+    });
+    const inWing = new THREE.Mesh(inWingGeo, wingMat);
+    inWing.position.set(side * 0.32, 0.04, -0.05);
+    inWing.rotation.y = side * 0.2;
+    inWing.rotation.z = -side * 0.2; // 下傾
+    ship.add(inWing);
+
+    // 外翼上揚
+    const outWingGeo = new THREE.BoxGeometry(0.42, 0.02, 0.22);
+    const outWing = new THREE.Mesh(outWingGeo, wingMat);
+    outWing.position.set(side * 0.68, 0.12, -0.08);
+    outWing.rotation.y = side * 0.35;
+    outWing.rotation.z = side * 0.28; // 上翹
+    ship.add(outWing);
+
+    // 翼下高能粒子加農砲 (Heavy Particle Cannons)
+    const cannonGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8);
+    cannonGeo.rotateX(Math.PI / 2);
+    const cannonMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.95 });
+    const cannon = new THREE.Mesh(cannonGeo, cannonMat);
+    cannon.position.set(side * 0.45, -0.05, 0.2);
+    ship.add(cannon);
+
+    const muzzle = new THREE.Mesh(
+      new THREE.SphereGeometry(0.04, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff0044 })
+    );
+    muzzle.position.set(side * 0.45, -0.05, 0.46);
+    ship.add(muzzle);
+  }
+
+  // 高聳後掠垂直尾翼 (Swept Vertical Tail Fin)
+  const tailGeo = new THREE.BoxGeometry(0.025, 0.35, 0.35);
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.9 });
+  const tail = new THREE.Mesh(tailGeo, tailMat);
+  tail.position.set(0, 0.22, -0.32);
+  tail.rotation.x = -0.35;
+  ship.add(tail);
+
+  // 雙環同心電磁加速光環 (Dual Concentric Rings)
+  const ring1 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.8, 0.02, 12, 32),
+    new THREE.MeshBasicMaterial({ color: 0xff0044, transparent: true, opacity: 0.85 })
+  );
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.66, 0.018, 12, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.85 })
+  );
+  ship.add(ring1);
+  ship.add(ring2);
+  ship.userData.rotRing1 = ring1;
+  ship.userData.rotRing2 = ring2;
+
+  return ship;
+}
+
+// 5. 【巡航巨艦 (Dreadnought Capital Ship)】
+function createMinibossShip() {
+  const ship = new THREE.Group();
+
+  // 1.8米 長型多層重裝戰列艦體 (Heavy Warship Hull)
+  const mainHullGeo = new THREE.BoxGeometry(0.65, 0.38, 1.45);
+  const hullMat = new THREE.MeshStandardMaterial({
+    color: 0x2a0818,
+    roughness: 0.25,
+    metalness: 0.92,
+    emissive: 0x440022,
+    emissiveIntensity: 0.7
+  });
+  const mainHull = new THREE.Mesh(mainHullGeo, hullMat);
+  ship.add(mainHull);
+
+  // 艦首楔形裝甲衝角 (Wedge Bow Ram)
+  const bowGeo = new THREE.ConeGeometry(0.38, 0.65, 4);
+  bowGeo.rotateX(Math.PI / 2);
+  const bow = new THREE.Mesh(bowGeo, hullMat);
+  bow.position.set(0, 0, 0.98);
+  bow.scale.set(1.4, 0.7, 1.0);
+  ship.add(bow);
+
+  // 多層艦橋指揮塔 (Command Bridge Superstructure)
+  const bridge1 = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38, 0.2, 0.45),
+    new THREE.MeshStandardMaterial({ color: 0xee0077, metalness: 0.9, roughness: 0.2 })
+  );
+  bridge1.position.set(0, 0.26, -0.15);
+  ship.add(bridge1);
+
+  const bridge2 = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.16, 0.25),
+    new THREE.MeshBasicMaterial({ color: 0xffcc00 })
+  );
+  bridge2.position.set(0, 0.4, -0.18);
+  ship.add(bridge2);
+
+  // 左右側翼重型推進引擎艙 (Engine Nacelles)
+  for (let side of [-1, 1]) {
+    const nacelleGeo = new THREE.CylinderGeometry(0.14, 0.18, 1.1, 8);
+    nacelleGeo.rotateX(Math.PI / 2);
+    const nacelleMat = new THREE.MeshStandardMaterial({
+      color: 0x1f0814,
+      metalness: 0.95,
+      roughness: 0.3
+    });
+    const nacelle = new THREE.Mesh(nacelleGeo, nacelleMat);
+    nacelle.position.set(side * 0.62, -0.05, -0.2);
+    ship.add(nacelle);
+
+    // 引擎支撐翼 (Pylons)
+    const pylonGeo = new THREE.BoxGeometry(0.28, 0.05, 0.35);
+    const pylon = new THREE.Mesh(pylonGeo, hullMat);
+    pylon.position.set(side * 0.42, -0.05, -0.2);
+    ship.add(pylon);
+
+    // 引擎噴流火焰 (Heavy Afterburner Flame)
+    const flameGeo = new THREE.ConeGeometry(0.12, 0.5, 8);
+    flameGeo.rotateX(-Math.PI / 2);
+    const flameMat = new THREE.MeshBasicMaterial({
+      color: 0xff0055,
+      transparent: true,
+      opacity: 0.9
+    });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(side * 0.62, -0.05, -0.98);
+    ship.add(flame);
+  }
+
+  // 4座重型雙聯主砲塔 (Dorsal / Ventral Turrets)
+  for (let z of [0.45, -0.45]) {
+    const turretBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.14, 0.08, 12),
+      new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.95 })
+    );
+    turretBase.position.set(0, 0.22, z);
+    ship.add(turretBase);
+
+    for (let side of [-0.045, 0.045]) {
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 0.38, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff0055 })
+      );
+      barrel.geometry.rotateX(Math.PI / 2);
+      barrel.position.set(side, 0.24, z + 0.16);
+      ship.add(barrel);
+    }
+  }
+
+  // 3 架精緻的小型護衛浮游機 (Escort Drone Escorts)
+  const satGroup = new THREE.Group();
+  for (let s = 0; s < 3; s++) {
+    const mini = new THREE.Group();
+    const miniCore = new THREE.Mesh(
+      new THREE.ConeGeometry(0.09, 0.28, 4),
+      new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9 })
+    );
+    miniCore.rotation.x = Math.PI / 2;
+    mini.add(miniCore);
+
+    const miniWing = new THREE.Mesh(
+      new THREE.BoxGeometry(0.25, 0.015, 0.12),
+      new THREE.MeshBasicMaterial({ color: 0xff0055 })
+    );
+    mini.add(miniWing);
+
+    mini.position.set(
+      Math.cos(s * Math.PI * 2 / 3) * 1.45,
+      Math.sin(s * Math.PI * 2 / 3) * 1.45,
+      0
+    );
+    satGroup.add(mini);
+  }
+  ship.add(satGroup);
+  ship.userData.satGroup = satGroup;
+
+  return ship;
+}
+
+// 6. 【OMEGA 終焉破壞星核 (Omega Core Fortress)】
+function createBossShip() {
+  const ship = new THREE.Group();
+
+  // 中央暗物質高能星核 (Central Dark Matter Core)
+  const coreGeo = new THREE.SphereGeometry(0.72, 32, 32);
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0018,
+    roughness: 0.1,
+    metalness: 0.95,
+    emissive: 0x330066,
+    emissiveIntensity: 0.95
+  });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  ship.add(core);
+
+  // 核心滅世之眼 (Singularity Eye)
+  const eyeGeo = new THREE.SphereGeometry(0.35, 24, 24);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eye = new THREE.Mesh(eyeGeo, eyeMat);
+  ship.add(eye);
+
+  // 外層多面體幾何防護拘束外殼 (Geodesic Armor Shell)
+  const cageGeo = new THREE.IcosahedronGeometry(0.95, 1);
+  const cageMat = new THREE.MeshStandardMaterial({
+    color: 0x8800ff,
+    roughness: 0.2,
+    metalness: 0.9,
+    wireframe: true
+  });
+  const cage = new THREE.Mesh(cageGeo, cageMat);
+  ship.add(cage);
+  ship.userData.cage = cage;
+
+  // 4 座向外延伸的巨型重力滅世砲塔 (Cosmic Spire Cannons)
+  for (let i = 0; i < 4; i++) {
+    const angle = i * Math.PI / 2;
+    const spireGroup = new THREE.Group();
+    spireGroup.rotation.z = angle;
+
+    // 塔身
+    const spireGeo = new THREE.CylinderGeometry(0.08, 0.18, 1.1, 6);
+    spireGeo.translate(0, 0.95, 0);
+    const spireMat = new THREE.MeshStandardMaterial({
+      color: 0x220044,
+      metalness: 0.95,
+      roughness: 0.2
+    });
+    const spire = new THREE.Mesh(spireGeo, spireMat);
+    spireGroup.add(spire);
+
+    // 塔尖能量聚能水晶
+    const crystalGeo = new THREE.OctahedronGeometry(0.12, 0);
+    const crystalMat = new THREE.MeshBasicMaterial({ color: 0xff0088 });
+    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+    crystal.position.set(0, 1.55, 0);
+    spireGroup.add(crystal);
+
+    ship.add(spireGroup);
+  }
+
+  // 三重同軸迴轉天文儀力場環 (Gimbal Orbital Rings)
+  const ring1 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.65, 0.035, 12, 48),
+    new THREE.MeshBasicMaterial({ color: 0x8800ff, transparent: true, opacity: 0.9 })
+  );
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.35, 0.028, 12, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.85 })
+  );
+  const ring3 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.08, 0.022, 12, 48),
+    new THREE.MeshBasicMaterial({ color: 0x00f7ff, transparent: true, opacity: 0.85 })
+  );
+  ring2.rotation.x = Math.PI / 3;
+  ring3.rotation.y = Math.PI / 3;
+  ship.add(ring1);
+  ship.add(ring2);
+  ship.add(ring3);
+  ship.userData.orbitRing1 = ring1;
+  ship.userData.orbitRing2 = ring2;
+  ship.userData.orbitRing3 = ring3;
+
+  // 6 架環繞巡邏的六芒星護衛死星戰鬥機 (6 Orbiting Fighter Escorts)
+  const satGroup = new THREE.Group();
+  for (let s = 0; s < 6; s++) {
+    const angle = s * Math.PI / 3;
+    const miniFighter = new THREE.Group();
+
+    // 戰機本體
+    const fBody = new THREE.Mesh(
+      new THREE.ConeGeometry(0.1, 0.32, 4),
+      new THREE.MeshStandardMaterial({ color: 0x8800ff, metalness: 0.9 })
+    );
+    fBody.rotation.x = Math.PI / 2;
+    miniFighter.add(fBody);
+
+    // 戰機光翼
+    const fWings = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.02, 0.15),
+      new THREE.MeshBasicMaterial({ color: 0xff0055 })
+    );
+    miniFighter.add(fWings);
+
+    miniFighter.position.set(Math.cos(angle) * 1.95, Math.sin(angle) * 1.95, 0);
+    satGroup.add(miniFighter);
+  }
+  ship.add(satGroup);
+  ship.userData.satGroup = satGroup;
+
+  return ship;
+}
+
+// 生成各種類型的敵人 (精緻科幻星艦模型)
 function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
-  const enemyGroup = new THREE.Group();
+  let enemyGroup;
   let maxHp = 3;
-  let radius = 0.45;
-  let rotSpeedX = (Math.random() - 0.5) * 1.5;
-  let rotSpeedY = (Math.random() - 0.5) * 2.0;
+  let radius = 0.48;
+  let rotSpeedX = (Math.random() - 0.5) * 1.2;
+  let rotSpeedY = (Math.random() - 0.5) * 1.5;
   let canShoot = false;
   let shootInterval = 4.0;
   let shootTimer = 2.0;
 
   if (type === 'drone') {
-    // 【基本小怪】：機動浮游晶石 (HP 3)
+    // 【基本小怪】：機動浮游戰機 (HP 3)
     maxHp = 3;
-    radius = 0.4;
+    radius = 0.48;
     canShoot = false;
-    const geo = new THREE.OctahedronGeometry(0.35, 0);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xff0055,
-      roughness: 0.2,
-      metalness: 0.8,
-      emissive: 0x880022,
-      emissiveIntensity: 0.6
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    enemyGroup.add(mesh);
-
-    const shieldGeo = new THREE.TorusGeometry(0.48, 0.015, 8, 24);
-    const shieldMat = new THREE.MeshBasicMaterial({ color: 0x00f7ff, transparent: true, opacity: 0.7 });
-    enemyGroup.add(new THREE.Mesh(shieldGeo, shieldMat));
+    enemyGroup = createDroneShip();
   } else if (type === 'speedy') {
-    // 【疾速僚機】：青色高速浮游菱晶 (HP 6，機動蛇行、發射電漿)
+    // 【疾速僚機】：青色高速穿梭攔截機 (HP 6，蛇行規避、連射電漿)
     maxHp = 6;
-    radius = 0.38;
+    radius = 0.45;
     canShoot = true;
     shootInterval = 4.0 + Math.random() * 2.0;
     shootTimer = 1.8 + Math.random() * 2.0;
-    rotSpeedX = (Math.random() - 0.5) * 3.5;
-    rotSpeedY = (Math.random() - 0.5) * 4.2;
-    const geo = new THREE.ConeGeometry(0.3, 0.6, 5);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x00f7ff,
-      roughness: 0.1,
-      metalness: 0.9,
-      emissive: 0x007788,
-      emissiveIntensity: 0.8
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI / 2;
-    enemyGroup.add(mesh);
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.42, 0.015, 8, 24),
-      new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.85 })
-    );
-    enemyGroup.add(ring);
+    rotSpeedX = (Math.random() - 0.5) * 2.5;
+    rotSpeedY = (Math.random() - 0.5) * 3.0;
+    enemyGroup = createSpeedyShip();
   } else if (type === 'armored') {
-    // 【重裝護甲機】：赤橙色多面重型無人機 (HP 18，厚實護甲，普通氣功波減傷 50%)
+    // 【重裝護甲艦】：赤橙色多面重型裝甲艦 (HP 18，厚實護甲，普通氣功波減傷 50%)
     maxHp = 18;
-    radius = 0.58;
+    radius = 0.65;
     canShoot = false;
-    const geo = new THREE.DodecahedronGeometry(0.5, 0);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xff4400,
-      roughness: 0.3,
-      metalness: 0.9,
-      emissive: 0x772200,
-      emissiveIntensity: 0.7
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    enemyGroup.add(mesh);
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.72, 0.03, 12, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 })
-    );
-    enemyGroup.add(ring);
+    rotSpeedX = (Math.random() - 0.5) * 0.9;
+    rotSpeedY = (Math.random() - 0.5) * 1.2;
+    enemyGroup = createArmoredShip();
   } else if (type === 'elite') {
-    // 【精英機】：雙重旋轉光環精英戰機 (HP 28，主動連射電漿)
+    // 【精英機】：黃金精英雙翼獵鷹 (HP 28，雙同心加速環，主動電漿齊射)
     maxHp = 28;
-    radius = 0.68;
+    radius = 0.75;
     canShoot = true;
     shootInterval = 3.2 + Math.random() * 1.2;
     shootTimer = 1.2 + Math.random() * 1.5;
-    const geo = new THREE.IcosahedronGeometry(0.55, 0);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffaa00,
-      roughness: 0.1,
-      metalness: 0.9,
-      emissive: 0x663300,
-      emissiveIntensity: 0.8
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    enemyGroup.add(mesh);
-
-    const ring1 = new THREE.Mesh(
-      new THREE.TorusGeometry(0.8, 0.02, 12, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff0044, transparent: true, opacity: 0.85 })
-    );
-    const ring2 = new THREE.Mesh(
-      new THREE.TorusGeometry(0.68, 0.018, 12, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.85 })
-    );
-    enemyGroup.add(ring1);
-    enemyGroup.add(ring2);
+    rotSpeedX = (Math.random() - 0.5) * 1.4;
+    rotSpeedY = (Math.random() - 0.5) * 1.6;
+    enemyGroup = createEliteShip();
   } else if (type === 'miniboss') {
-    // 【中階母艦】：深紅巨艦 + 3 顆環繞浮游護盾衛星 (HP 60，兇猛火力)
+    // 【中階母艦】：殲星巡航母艦 + 3 架護衛艦 (HP 60，兇猛火力)
     maxHp = 60;
-    radius = 0.95;
+    radius = 1.05;
     canShoot = true;
     shootInterval = 2.4 + Math.random() * 0.8;
     shootTimer = 1.0;
-    const geo = new THREE.IcosahedronGeometry(0.8, 0);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xee0077,
-      roughness: 0.15,
-      metalness: 0.92,
-      emissive: 0x880044,
-      emissiveIntensity: 0.85
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    enemyGroup.add(mesh);
-
-    const satGroup = new THREE.Group();
-    for (let s = 0; s < 3; s++) {
-      const satGeo = new THREE.OctahedronGeometry(0.18, 0);
-      const satMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-      const sat = new THREE.Mesh(satGeo, satMat);
-      sat.position.set(Math.cos(s * Math.PI * 2 / 3) * 1.35, Math.sin(s * Math.PI * 2 / 3) * 1.35, 0);
-      satGroup.add(sat);
-    }
-    enemyGroup.add(satGroup);
-    enemyGroup.userData.satGroup = satGroup;
+    rotSpeedX = (Math.random() - 0.5) * 0.7;
+    rotSpeedY = (Math.random() - 0.5) * 0.9;
+    enemyGroup = createMinibossShip();
   } else if (type === 'boss') {
-    // 【大 BOSS】：巨型 OMEGA 毀滅星核 + 6 顆護盾衛星 (HP 160，極限壓迫感)
+    // 【大 BOSS】：巨型 OMEGA 終焉破壞星核 (HP 160，三重同軸天體儀力場 + 6 架護衛戰機)
     maxHp = 160;
-    radius = 1.25;
+    radius = 1.45;
     canShoot = true;
     shootInterval = 1.8 + Math.random() * 0.6;
     shootTimer = 0.8;
-    const geo = new THREE.DodecahedronGeometry(1.0, 0);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x8800ff,
-      roughness: 0.15,
-      metalness: 0.95,
-      emissive: 0x440088,
-      emissiveIntensity: 0.95
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    enemyGroup.add(mesh);
-
-    const satGroup = new THREE.Group();
-    for (let s = 0; s < 6; s++) {
-      const satGeo = new THREE.OctahedronGeometry(0.22, 0);
-      const satMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
-      const sat = new THREE.Mesh(satGeo, satMat);
-      sat.position.set(Math.cos(s * Math.PI / 3) * 1.7, Math.sin(s * Math.PI / 3) * 1.7, 0);
-      satGroup.add(sat);
-    }
-    enemyGroup.add(satGroup);
-    enemyGroup.userData.satGroup = satGroup;
+    rotSpeedX = (Math.random() - 0.5) * 0.5;
+    rotSpeedY = (Math.random() - 0.5) * 0.7;
+    enemyGroup = createBossShip();
   }
 
   if (customHp) maxHp = customHp;
@@ -2442,9 +2912,26 @@ function animate() {
       t.position.x = t.userData.baseX + Math.sin(elapsedTime * 3.5 + t.userData.floatOffset) * 0.35;
     }
 
-    // BOSS 與巨艦護盾衛星環繞旋轉
+    // 僚機自轉光環
+    if (t.userData.rotRing) {
+      t.userData.rotRing.rotation.z += delta * 4;
+    }
+    // 精英機雙同心加速環逆向旋轉
+    if (t.userData.rotRing1) {
+      t.userData.rotRing1.rotation.z += delta * 5;
+      t.userData.rotRing2.rotation.z -= delta * 4;
+    }
+    // BOSS 三重天體儀軌道環與拘束外殼多軸旋轉
+    if (t.userData.orbitRing1) {
+      t.userData.orbitRing1.rotation.z += delta * 2.2;
+      t.userData.orbitRing2.rotation.x += delta * 1.8;
+      t.userData.orbitRing3.rotation.y += delta * 2.5;
+      if (t.userData.cage) t.userData.cage.rotation.y -= delta * 1.2;
+    }
+
+    // BOSS 與巨艦護衛僚機環繞旋轉
     if (t.userData.satGroup) {
-      t.userData.satGroup.rotation.z += delta * (t.userData.type === 'boss' ? 2.5 : 3.5);
+      t.userData.satGroup.rotation.z += delta * (t.userData.type === 'boss' ? 1.6 : 2.2);
     }
 
     // 敵人主動發射電漿砲
