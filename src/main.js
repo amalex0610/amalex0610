@@ -945,32 +945,18 @@ function fireKiBlast() {
 }
 
 // 坐標轉換與手勢幾何
-function getPalmWorldPosition() {
+function getPalmRayDirection() {
   const normX = (palmScreenPos.x * 2) - 1;
   const normY = -(palmScreenPos.y * 2) + 1;
   const vec = new THREE.Vector3(normX, normY, 0.5);
   vec.unproject(camera);
-  vec.sub(camera.position).normalize();
-  const distance = 1.4;
-  return new THREE.Vector3().copy(camera.position).addScaledVector(vec, distance);
+  return vec.sub(camera.position).normalize();
 }
 
-function computeMiddleFingerAimDirection(landmarks) {
-  const pWrist = getLandmarkCameraPos(landmarks[0]);
-  const pMiddleTip = getLandmarkCameraPos(landmarks[12]);
-  const fingerVector = new THREE.Vector3().subVectors(pMiddleTip, pWrist).normalize();
-
-  const invCamQuat = camera.quaternion.clone().invert();
-  const fingerCam = fingerVector.clone().applyQuaternion(invCamQuat);
-
-  const sensitivity = 2.4;
-  const aimCam = new THREE.Vector3(
-    fingerCam.x * sensitivity,
-    fingerCam.y * sensitivity,
-    fingerCam.z < -0.1 ? fingerCam.z : -1.0
-  ).normalize();
-
-  return aimCam.applyQuaternion(camera.quaternion).normalize();
+function getPalmWorldPosition() {
+  const rayDir = getPalmRayDirection();
+  const distance = 1.4;
+  return new THREE.Vector3().copy(camera.position).addScaledVector(rayDir, distance);
 }
 
 function checkIsPalmUp(landmarks) {
@@ -1004,22 +990,26 @@ function checkIsFist(landmarks) {
   return curled >= 3;
 }
 
+// 依據手掌螢幕座標直接對準目標（像滑鼠游標一樣直覺，支援大範圍磁吸鎖定！）
 function findAimedTarget(fromPos, aimDir, excludeList = []) {
   let closestTarget = null;
-  let minAngle = 0.55;
+  let minScreenDist = 0.26; // 螢幕空間寬容半徑（約四分之一螢幕寬度，移到附近立即鎖定！）
+
+  const palmNdcX = (palmScreenPos.x * 2) - 1;
+  const palmNdcY = -(palmScreenPos.y * 2) + 1;
 
   targets.forEach(t => {
     if (excludeList.includes(t)) return;
-    const toTarget = new THREE.Vector3().subVectors(t.position, fromPos);
-    const dist = toTarget.length();
-    if (dist > 18) return;
+    const proj = t.position.clone().project(camera);
+    if (proj.z > 1) return; // 忽略在鏡頭背後的目標
 
-    const dirToTarget = toTarget.clone().normalize();
-    const dot = aimDir.dot(dirToTarget);
-    const angle = Math.acos(Math.min(1, Math.max(-1, dot)));
+    // 計算手掌準心與敵人在螢幕 2D 上的距離
+    const screenDist = Math.hypot(proj.x - palmNdcX, proj.y - palmNdcY);
+    // 大型 BOSS 與精英機給予更大的吸附範圍
+    const bonusRadius = t.userData.type === 'boss' ? 0.14 : (t.userData.type === 'elite' ? 0.06 : 0);
 
-    if (angle < minAngle) {
-      minAngle = angle;
+    if (screenDist - bonusRadius < minScreenDist) {
+      minScreenDist = screenDist - bonusRadius;
       closestTarget = t;
     }
   });
@@ -1147,73 +1137,70 @@ function onHandResults(results) {
       const isFist = checkIsFist(landmarks);
       const isPalmUp = !isFist && checkIsPalmUp(landmarks);
 
-      // 1. 中指指向瞄準
-      if (!isFist) {
-        const rawAimDir = computeMiddleFingerAimDirection(landmarks);
-        targetAimDir.copy(rawAimDir);
-      }
+      // 1. 掌心游標直接瞄準（手移到哪，準心就精準跟到哪！）
+      targetAimDir.copy(getPalmRayDirection());
 
-    const pPos = getPalmWorldPosition();
+      const pPos = getPalmWorldPosition();
 
-    // 3. 狀態機處理
-    if (!isFiring && !isGameOver) {
-      // 狀態 A：掌心向上聚氣
-      if (isPalmUp) {
-        chargeLevel = Math.min(1.0, chargeLevel + 0.022);
-        updateChargeUI();
-        sound.startChargeHum(chargeLevel);
+      // 3. 狀態機處理
+      if (!isFiring && !isGameOver) {
+        // 狀態 A：掌心向上聚氣
+        if (isPalmUp) {
+          chargeLevel = Math.min(1.0, chargeLevel + 0.022);
+          updateChargeUI();
+          sound.startChargeHum(chargeLevel);
 
-        statusEl.textContent = `⚡ 掌心向上聚氣中 (${Math.round(chargeLevel * 100)}%)`;
-        guideIconEl.textContent = "🤲";
-        guideTextEl.textContent = chargeLevel > 0.8 ? "能量充足！以中指瞄準目標並握拳鎖定！" : "維持掌心向上托天蓄力...";
-      } else {
-        sound.stopChargeHum();
-      }
-
-      // 狀態 B：握拳多重鎖定
-      if (isFist) {
-        const candidate = findAimedTarget(pPos, smoothedAimDir, lockedTargets);
-        if (candidate && lockedTargets.length < MAX_LOCKS) {
-          lockedTargets.push(candidate);
-          sound.playMultiLock(lockedTargets.length - 1);
-          if (navigator.vibrate) navigator.vibrate([70, 30, 70]);
-        }
-
-        if (lockedTargets.length > 0) {
-          statusEl.textContent = `🎯 多重鎖定: ${lockedTargets.length} 體 (LOCKED x${lockedTargets.length})！`;
-          guideIconEl.textContent = "🔒";
-          guideTextEl.textContent = `已鎖定 ${lockedTargets.length} 體！出掌即可全彈齊射！`;
+          statusEl.textContent = `⚡ 掌心向上聚氣中 (${Math.round(chargeLevel * 100)}%)`;
+          guideIconEl.textContent = "🤲";
+          guideTextEl.textContent = chargeLevel > 0.8 ? "能量充足！手移到敵人上握拳即可鎖定！" : "維持掌心向上托天蓄力...";
         } else {
-          statusEl.textContent = "✊ 握拳中 (對準目標自動鎖定)";
-          guideIconEl.textContent = "✊";
-          guideTextEl.textContent = "對準目標即可自動逐一鎖定 (最多 5 體)";
+          sound.stopChargeHum();
         }
-      }
 
-      // 狀態 C：出掌齊射
-      if (wasFistState && !isFist && !isPalmUp) {
-        if (lockedTargets.length > 0 || chargeLevel >= 0.15) {
+        // 狀態 B：握拳多重鎖定
+        if (isFist) {
+          const candidate = findAimedTarget(pPos, smoothedAimDir, lockedTargets);
+          if (candidate && lockedTargets.length < MAX_LOCKS) {
+            lockedTargets.push(candidate);
+            sound.playMultiLock(lockedTargets.length - 1);
+            if (navigator.vibrate) navigator.vibrate([70, 30, 70]);
+          }
+
+          if (lockedTargets.length > 0) {
+            statusEl.textContent = `🎯 多重鎖定: ${lockedTargets.length} 體 (LOCKED x${lockedTargets.length})！`;
+            guideIconEl.textContent = "🔒";
+            guideTextEl.textContent = `已鎖定 ${lockedTargets.length} 體！繼續移動拳頭可鎖更多，張開手掌全彈齊射！`;
+          } else {
+            statusEl.textContent = "✊ 握拳掃描中 (移到敵人上即可鎖定)";
+            guideIconEl.textContent = "✊";
+            guideTextEl.textContent = "移動拳頭掃過敵人即可自動鎖定 (最多 5 體)";
+          }
+        }
+
+        // 狀態 C：出掌齊射
+        if (wasFistState && !isFist && !isPalmUp) {
+          if (lockedTargets.length > 0 || chargeLevel >= 0.15) {
+            fireKiBlast();
+          }
+        } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35)) {
           fireKiBlast();
+        } else if (!isFist && !isPalmUp && lockedTargets.length === 0) {
+          statusEl.textContent = "🎯 掌心游標瞄準中";
+          guideIconEl.textContent = "🖐️";
+          guideTextEl.textContent = "把掌心移到敵人身上，握拳鎖定、張開手掌齊射！";
         }
-      } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35)) {
-        fireKiBlast();
-      } else if (!isFist && !isPalmUp && lockedTargets.length === 0) {
-        statusEl.textContent = "🎯 中指指向瞄準";
-        guideIconEl.textContent = "👆";
-        guideTextEl.textContent = "以中指指向目標握拳鎖定，出掌全彈齊射！";
       }
-    }
 
-    wasFistState = isFist;
-    drawHandAura(landmarks, isFist, isPalmUp);
-  } else {
-    isHandDetected = false;
-    wasFistState = false;
-    sound.stopChargeHum();
-    statusEl.textContent = "等待手掌進入視野...";
-    guideIconEl.textContent = "🖐️";
-    guideTextEl.textContent = "請將手伸到鏡頭前，掌心向上聚氣";
-  }
+      wasFistState = isFist;
+      drawHandAura(landmarks, isFist, isPalmUp);
+    } else {
+      isHandDetected = false;
+      wasFistState = false;
+      sound.stopChargeHum();
+      statusEl.textContent = "等待手掌進入視野...";
+      guideIconEl.textContent = "🖐️";
+      guideTextEl.textContent = "請將手伸到鏡頭前，掌心向上聚氣";
+    }
   } catch (err) {
     console.error("onHandResults error:", err);
   }
@@ -1247,7 +1234,7 @@ function animate() {
   const delta = clock.getDelta();
   const elapsedTime = clock.getElapsedTime();
 
-  smoothedAimDir.lerp(targetAimDir, 0.22);
+  smoothedAimDir.lerp(targetAimDir, 0.35);
   smoothedAimDir.normalize();
 
   // 更新掌心聚氣球與瞄準光束
@@ -1277,14 +1264,11 @@ function animate() {
     aimLine.geometry.attributes.position.needsUpdate = true;
     aimLine.material.opacity = 0.25 + chargeLevel * 0.65;
 
-    const aimPoint = new THREE.Vector3().copy(pPos).addScaledVector(smoothedAimDir, 5.0);
-    const proj = aimPoint.clone().project(camera);
-    if (proj.z < 1) {
-      const screenX = (proj.x * 0.5 + 0.5) * window.innerWidth;
-      const screenY = (-(proj.y * 0.5) + 0.5) * window.innerHeight;
-      reticleEl.style.transform = `translate(${screenX - 22}px, ${screenY - 22}px)`;
-      reticleEl.style.opacity = '0.9';
-    }
+    // 準心直接貼合掌心在螢幕上的位置（像滑鼠游標一樣指哪打哪）
+    const screenX = palmScreenPos.x * window.innerWidth;
+    const screenY = palmScreenPos.y * window.innerHeight;
+    reticleEl.style.transform = `translate(${screenX - 22}px, ${screenY - 22}px)`;
+    reticleEl.style.opacity = '0.95';
   } else {
     kiGroup.visible = false;
     kiLight.intensity = 0;
