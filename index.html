@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>AR 氣功破 - 手勢破壞遊戲</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <!-- MediaPipe Hands -->
+    <script src="mediapipe/hands.js"></script>
+  </head>
+  <body>
+    <div id="game-container">
+      <!-- 攝影機視訊背景 -->
+      <video id="webcam" playsinline autoplay muted></video>
+      
+      <!-- Three.js 3D 渲染層 -->
+      <canvas id="ar-canvas"></canvas>
+
+      <!-- 2D 手部骨架輔助畫布 (輕量反饋) -->
+      <canvas id="hand-debug-canvas"></canvas>
+
+      <!-- UI HUD 介面 -->
+      <div id="hud-overlay">
+        <!-- 頂部資訊列 -->
+        <header class="hud-header">
+          <div class="hud-badge pulse-glow">
+            <span class="status-dot"></span>
+            <span id="tracking-status">初始化 AR 鏡頭...</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">擊破目標</span>
+            <span id="score-counter">0</span>
+          </div>
+        </header>
+
+        <!-- 手勢引導提示 -->
+        <div id="gesture-guide" class="guide-box">
+          <div id="guide-icon">🖐️</div>
+          <div id="guide-text">請將手掌伸入鏡頭前方</div>
+        </div>
+
+        <!-- 畫面準心 / 射線導引 -->
+        <div id="reticle">
+          <div class="reticle-ring"></div>
+          <div class="reticle-dot"></div>
+        </div>
+
+        <!-- 底部控制與能量條 -->
+        <footer class="hud-footer">
+          <!-- 氣功蓄力計量條 -->
+          <div class="charge-container">
+            <div class="charge-label-row">
+              <span>氣功蓄力 (KI ENERGY)</span>
+              <span id="charge-percent">0%</span>
+            </div>
+            <div class="charge-bar-bg">
+              <div id="charge-bar-fill"></div>
+            </div>
+          </div>
+
+          <!-- 功能操作按鈕列 -->
+          <div class="controls-row">
+            <button id="btn-switch-cam" class="hud-btn" title="切換前後鏡頭">
+              🔄 切換鏡頭
+            </button>
+            <button id="btn-fire" class="hud-btn fire-btn" title="手動釋放氣功波">
+              💥 氣功發射！
+            </button>
+            <button id="btn-add-target" class="hud-btn" title="在鏡頭前生成目標">
+              🎯 放置目標
+            </button>
+          </div>
+        </footer>
+      </div>
+
+      <!-- 首次點擊啟動覆蓋層 (iOS Safari 必須由使用者點擊後才允許播放音效與啟用鏡頭) -->
+      <div id="start-overlay">
+        <div class="start-card">
+          <h1>⚡ AR 氣功破 ⚡</h1>
+          <p class="subtitle">用你的雙手釋放毀滅能量！</p>
+          <div class="instructions">
+            <div class="step-item">
+              <span class="step-num">1</span>
+              <span><b>掌心向上</b>：托天聚氣，凝聚氣功球</span>
+            </div>
+            <div class="step-item">
+              <span class="step-num">2</span>
+              <span><b>中指指向</b>：瞄準鏡頭中的懸浮物體</span>
+            </div>
+            <div class="step-item">
+              <span class="step-num">3</span>
+              <span><b>握緊拳頭</b>：揮動手腕連續鎖定多體 (最多 5 體)</span>
+            </div>
+            <div class="step-item">
+              <span class="step-num">4</span>
+              <span><b>轟然出掌</b>：全彈齊射！分裂弧線追蹤雷射齊轟！</span>
+            </div>
+          </div>
+          <button id="btn-start" class="start-btn">🔥 啟動 AR 模式</button>
+          <p class="hint-text">* 請在 Safari 彈出詢問時選擇「允許相機權限」</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
