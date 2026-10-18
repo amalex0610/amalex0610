@@ -84,6 +84,64 @@ html, body {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  gap: 8px;
+}
+
+/* 玩家 HP 框 */
+.hp-box {
+  background: var(--bg-dark);
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 60, 60, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.hp-bar-bg {
+  width: 65px;
+  height: 9px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#hp-bar-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #ffe600 60%, #ff0044 100%);
+  border-radius: 6px;
+  transition: width 0.2s ease-out;
+}
+
+#hp-text {
+  font-weight: 800;
+  color: #ff4d6d;
+  min-width: 26px;
+}
+
+/* 關卡徽章 */
+.stage-box {
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.5), rgba(255, 0, 100, 0.5));
+  border: 1px solid rgba(255, 200, 0, 0.8);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-weight: 900;
+  font-size: 13px;
+  color: #ffe600;
+  letter-spacing: 1px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.5);
+}
+
+.hud-status-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
 }
 
 .hud-badge {
@@ -91,10 +149,10 @@ html, body {
   align-items: center;
   gap: 8px;
   background: var(--bg-dark);
-  padding: 8px 14px;
+  padding: 6px 14px;
   border-radius: 20px;
   border: 1px solid rgba(0, 247, 255, 0.4);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.5px;
   backdrop-filter: blur(8px);
@@ -387,4 +445,211 @@ html, body {
   font-size: 12px;
   color: #888;
   margin-top: 14px;
+}
+
+/* BOSS 專屬血條 */
+#boss-bar-container {
+  width: 100%;
+  max-width: 440px;
+  align-self: center;
+  background: rgba(25, 5, 10, 0.9);
+  border: 2px solid #ff0044;
+  border-radius: 14px;
+  padding: 8px 14px;
+  box-shadow: 0 0 20px rgba(255, 0, 68, 0.6);
+  transition: all 0.4s cubic-bezier(0.1, 0.9, 0.2, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  margin-top: 6px;
+}
+
+.boss-bar-hidden {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+  display: none;
+}
+
+.boss-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.boss-tag {
+  background: #ff0044;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+#boss-name {
+  color: #ff99aa;
+  letter-spacing: 1px;
+}
+
+#boss-hp-text {
+  color: #ff0044;
+}
+
+.boss-bar-bg {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#boss-bar-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ff0044, #ff8800);
+  box-shadow: 0 0 12px #ff0044;
+  transition: width 0.15s ease-out;
+}
+
+/* 受擊全螢幕紅框閃爍 */
+#damage-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-shadow: inset 0 0 60px rgba(255, 0, 50, 0.9), inset 0 0 120px rgba(255, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.08s ease-out;
+}
+
+#damage-overlay.flash {
+  opacity: 1;
+}
+
+/* BOSS WARNING 橫幅 */
+#boss-warning-banner {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  width: 100%;
+  background: rgba(180, 0, 0, 0.88);
+  border-top: 3px solid #ffcc00;
+  border-bottom: 3px solid #ffcc00;
+  padding: 14px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 60;
+  animation: pulse-banner 0.8s infinite alternate;
+}
+
+.warning-text {
+  font-size: 19px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 2px;
+  text-shadow: 0 0 15px #ffcc00;
+}
+
+@keyframes pulse-banner {
+  from { transform: scale(0.98); opacity: 0.9; }
+  to { transform: scale(1.02); opacity: 1; }
+}
+
+/* 食指彈反成功橫幅 (居合彈反) */
+#parry-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.1);
+  background: linear-gradient(135deg, rgba(0, 247, 255, 0.95), rgba(255, 230, 0, 0.95));
+  color: #000;
+  font-weight: 900;
+  font-size: 19px;
+  padding: 10px 24px;
+  border-radius: 30px;
+  box-shadow: 0 0 35px #00f7ff, 0 0 50px #ffe600;
+  z-index: 70;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: parry-pop 0.65s ease-out forwards;
+}
+
+@keyframes parry-pop {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  80% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -70%) scale(0.9); opacity: 0; }
+}
+
+/* 關卡結算 / Game Over 彈窗 */
+#game-result-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 10, 25, 0.94);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.result-card {
+  background: rgba(20, 30, 50, 0.92);
+  border: 2px solid #00f7ff;
+  border-radius: 20px;
+  padding: 28px 22px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(0, 247, 255, 0.3);
+}
+
+.result-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 22px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+  color: #ccc;
+}
+
+.stat-val {
+  font-weight: 800;
+  color: #ffe600;
+}
+
+.highlight-step {
+  border: 1px solid rgba(0, 247, 255, 0.5) !important;
+  background: rgba(0, 247, 255, 0.1) !important;
+}
+
+.parry-num {
+  background: #ffcc00 !important;
+  color: #000 !important;
+}
+
+.hidden {
+  display: none !important;
 }

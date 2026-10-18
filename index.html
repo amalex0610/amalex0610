@@ -19,27 +19,73 @@
       <!-- 2D 手部骨架輔助畫布 (輕量反饋) -->
       <canvas id="hand-debug-canvas"></canvas>
 
+      <!-- 受擊紅色閃爍圖層 -->
+      <div id="damage-overlay"></div>
+
+      <!-- BOSS 出場全螢幕警戒橫幅 -->
+      <div id="boss-warning-banner" class="hidden">
+        <div class="warning-stripes"></div>
+        <div class="warning-text">⚠️ WARNING: BOSS DETECTED ⚠️</div>
+        <div class="warning-stripes"></div>
+      </div>
+
+      <!-- 食指彈反成功浮動橫幅 -->
+      <div id="parry-banner" class="hidden">
+        <span class="parry-icon">⚡</span> <span class="parry-text">PARRY! 居合彈反!</span>
+      </div>
+
       <!-- UI HUD 介面 -->
       <div id="hud-overlay">
         <!-- 頂部資訊列 -->
         <header class="hud-header">
-          <div class="hud-badge pulse-glow">
-            <span class="status-dot"></span>
-            <span id="tracking-status">初始化 AR 鏡頭...</span>
+          <!-- 玩家血條 -->
+          <div class="hp-box">
+            <span class="hp-icon">❤️</span>
+            <div class="hp-bar-bg">
+              <div id="hp-bar-fill"></div>
+            </div>
+            <span id="hp-text">100</span>
           </div>
+
+          <!-- 關卡標籤 -->
+          <div class="stage-box">
+            <span id="stage-badge">STAGE 1</span>
+          </div>
+
+          <!-- 擊破計分 -->
           <div class="score-box">
-            <span class="score-label">擊破目標</span>
+            <span class="score-label">擊破數</span>
             <span id="score-counter">0</span>
           </div>
         </header>
 
+        <!-- BOSS 專屬巨型血條 (僅在 BOSS 關卡出現) -->
+        <div id="boss-bar-container" class="boss-bar-hidden">
+          <div class="boss-title-row">
+            <span class="boss-tag">⚠️ BOSS</span>
+            <span id="boss-name">OMEGA DESTROYER · 毀滅核心</span>
+            <span id="boss-hp-text">100%</span>
+          </div>
+          <div class="boss-bar-bg">
+            <div id="boss-bar-fill"></div>
+          </div>
+        </div>
+
+        <!-- 狀態指示徽章 -->
+        <div class="hud-status-row">
+          <div class="hud-badge pulse-glow">
+            <span class="status-dot"></span>
+            <span id="tracking-status">初始化 AR 鏡頭...</span>
+          </div>
+        </div>
+
         <!-- 手勢引導提示 -->
         <div id="gesture-guide" class="guide-box">
           <div id="guide-icon">🖐️</div>
-          <div id="guide-text">請將手掌伸入鏡頭前方</div>
+          <div id="guide-text">請將手伸入鏡頭前方</div>
         </div>
 
-        <!-- 畫面準心 / 射線導引 -->
+        <!-- 畫面動態準心 -->
         <div id="reticle">
           <div class="reticle-ring"></div>
           <div class="reticle-dot"></div>
@@ -73,11 +119,31 @@
         </footer>
       </div>
 
-      <!-- 首次點擊啟動覆蓋層 (iOS Safari 必須由使用者點擊後才允許播放音效與啟用鏡頭) -->
+      <!-- 關卡結算 / 遊戲結束彈窗 -->
+      <div id="game-result-overlay" class="hidden">
+        <div class="result-card">
+          <h1 id="result-title">🎉 STAGE CLEAR!</h1>
+          <p id="result-subtitle" class="subtitle">戰績報告</p>
+          <div class="result-stats">
+            <div class="stat-row">
+              <span>總擊破數</span>
+              <span id="result-score" class="stat-val">0</span>
+            </div>
+            <div class="stat-row">
+              <span>食指彈反次數</span>
+              <span id="result-parry" class="stat-val">0 次</span>
+            </div>
+          </div>
+          <button id="btn-next-stage" class="start-btn">進入下一波次 ➔</button>
+          <button id="btn-retry" class="start-btn hidden">⚡ 重新挑戰</button>
+        </div>
+      </div>
+
+      <!-- 首次點擊啟動覆蓋層 -->
       <div id="start-overlay">
         <div class="start-card">
           <h1>⚡ AR 氣功破 ⚡</h1>
-          <p class="subtitle">用你的雙手釋放毀滅能量！</p>
+          <p class="subtitle">BOSS 戰鬥與食指彈反系統已解鎖！</p>
           <div class="instructions">
             <div class="step-item">
               <span class="step-num">1</span>
@@ -85,7 +151,7 @@
             </div>
             <div class="step-item">
               <span class="step-num">2</span>
-              <span><b>中指指向</b>：瞄準鏡頭中的懸浮物體</span>
+              <span><b>中指指向</b>：瞄準鏡頭中的敵方物體</span>
             </div>
             <div class="step-item">
               <span class="step-num">3</span>
@@ -94,6 +160,10 @@
             <div class="step-item">
               <span class="step-num">4</span>
               <span><b>轟然出掌</b>：全彈齊射！分裂弧線追蹤雷射齊轟！</span>
+            </div>
+            <div class="step-item highlight-step">
+              <span class="step-num parry-num">⚔️</span>
+              <span><b>食指揮舞彈反</b>：面對敵方光彈，食指一揮<b>鏘！</b>反彈秒殺敵人！</span>
             </div>
           </div>
           <button id="btn-start" class="start-btn">🔥 啟動 AR 模式</button>
