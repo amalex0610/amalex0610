@@ -653,3 +653,67 @@ html, body {
 .hidden {
   display: none !important;
 }
+
+/* 螢幕外敵人導航雷達指示器 */
+#enemy-indicators-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.offscreen-indicator {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(10, 15, 30, 0.85);
+  border: 1.5px solid #ff0055;
+  border-radius: 20px;
+  color: #ff0055;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 14px rgba(255, 0, 85, 0.6);
+  transform: translate(-50%, -50%);
+  animation: pulse-indicator 1.2s infinite ease-in-out;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+.offscreen-indicator.indicator-boss {
+  border-color: #aa00ff;
+  color: #d880ff;
+  box-shadow: 0 0 18px rgba(170, 0, 255, 0.8);
+  font-size: 14px;
+  background: rgba(30, 10, 45, 0.9);
+}
+
+.offscreen-indicator.indicator-elite {
+  border-color: #ffaa00;
+  color: #ffcc00;
+  box-shadow: 0 0 16px rgba(255, 170, 0, 0.7);
+}
+
+.indicator-arrow {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+}
+
+@keyframes pulse-indicator {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.75;
+  }
+}

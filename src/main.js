@@ -309,30 +309,23 @@ const guideIconEl = document.getElementById('guide-icon');
 const guideTextEl = document.getElementById('guide-text');
 const reticleEl = document.getElementById('reticle');
 
-// 新增 UI 元件
-const hpBarFill = document.getElementById('hp-bar-fill');
-const hpText = document.getElementById('hp-text');
+// 關卡與 BOSS 相關 UI
 const stageBadge = document.getElementById('stage-badge');
 const bossBarContainer = document.getElementById('boss-bar-container');
 const bossBarFill = document.getElementById('boss-bar-fill');
 const bossHpText = document.getElementById('boss-hp-text');
 const bossWarningBanner = document.getElementById('boss-warning-banner');
-const parryBanner = document.getElementById('parry-banner');
-const damageOverlay = document.getElementById('damage-overlay');
+const enemyIndicatorsContainer = document.getElementById('enemy-indicators-container');
 
 const gameResultOverlay = document.getElementById('game-result-overlay');
 const resultTitle = document.getElementById('result-title');
 const resultSubtitle = document.getElementById('result-subtitle');
 const resultScore = document.getElementById('result-score');
-const resultParry = document.getElementById('result-parry');
 const btnNextStage = document.getElementById('btn-next-stage');
 const btnRetry = document.getElementById('btn-retry');
 
 // 玩家與關卡數值
-let playerHP = 100;
-const MAX_PLAYER_HP = 100;
 let score = 0;
-let parryCount = 0;
 let currentStage = 1; // 1: 小怪波, 2: 精英波, 3: 大 BOSS
 let isStageTransition = false;
 let isGameOver = false;
@@ -352,9 +345,8 @@ let lockedTargets = [];
 const MAX_LOCKS = 5;
 let wasFistState = false;
 
-// 食指彈反軌跡變數
-let lastIndexWorldPos = new THREE.Vector3();
-let indexVelocity = 0;
+// 螢幕外敵人導引指示器快取池
+const indicatorElements = [];
 
 // ==========================================
 // 3. Three.js 3D 渲染場景建置
@@ -662,16 +654,17 @@ function spawnEnemy(type = 'drone', customPos = null) {
     enemyGroup.userData.satGroup = satGroup;
   }
 
-  // 位置配置
+  // 位置配置：緊縮在鏡頭正前方 ±30° (0.52 rad) 舒適視野內，避免刷在死角或轉身看不到的地方
   if (customPos) {
     enemyGroup.position.copy(customPos);
   } else {
     if (type === 'boss') {
-      enemyGroup.position.set(0, 0.2, -4.8); // BOSS 居中霸氣降臨
+      enemyGroup.position.set(0, 0.15, -4.2); // BOSS 居中霸氣降臨
     } else {
-      const angle = (Math.random() - 0.5) * 1.5;
-      const height = (Math.random() - 0.5) * 1.0;
-      const dist = 3.5 + Math.random() * 2.5;
+      // 水平夾角收斂在 ±28 度以內，高度收斂在 -0.4 ~ +0.5m，距離 3.2m ~ 4.5m，保證一抬手機就在正前方！
+      const angle = (Math.random() - 0.5) * 0.95; 
+      const height = (Math.random() - 0.5) * 0.8 + 0.1;
+      const dist = 3.2 + Math.random() * 1.5;
       enemyGroup.position.set(Math.sin(angle) * dist, height, -Math.cos(angle) * dist);
     }
   }
@@ -684,8 +677,7 @@ function spawnEnemy(type = 'drone', customPos = null) {
     rotSpeedX: (Math.random() - 0.5) * 1.5,
     rotSpeedY: (Math.random() - 0.5) * 2.0,
     baseY: enemyGroup.position.y,
-    floatOffset: Math.random() * Math.PI * 2,
-    shootTimer: 2.0 + Math.random() * 2.0 // 射擊倒數秒數
+    floatOffset: Math.random() * Math.PI * 2
   };
 
   scene.add(enemyGroup);
@@ -693,51 +685,87 @@ function spawnEnemy(type = 'drone', customPos = null) {
   return enemyGroup;
 }
 
-// 敵人發射光彈
-function enemyFireProjectile(enemy) {
-  if (isGameOver || isStageTransition) return;
-  sound.playEnemyShoot();
+// ==========================================
+// 螢幕外敵人導航雷達指示器 (Off-screen Enemy Indicator)
+// ==========================================
+function updateOffscreenIndicators() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const padding = 45; // 螢幕邊緣安全留白
 
-  const isBoss = enemy.userData.type === 'boss';
-  const isElite = enemy.userData.type === 'elite';
+  let indicatorIdx = 0;
 
-  const projGeo = new THREE.SphereGeometry(isBoss ? 0.22 : 0.14, 16, 16);
-  const projMat = new THREE.MeshBasicMaterial({
-    color: isBoss ? 0xff0044 : (isElite ? 0xff8800 : 0xff0055),
-    transparent: true,
-    opacity: 0.95
-  });
-  const projMesh = new THREE.Mesh(projGeo, projMat);
-  projMesh.position.copy(enemy.position);
+  targets.forEach((target) => {
+    // 取得敵人在相機視錐中的投影位置
+    const targetPos = target.position.clone();
+    const proj = targetPos.clone().project(camera);
 
-  // 飛行方向：直撲相機鏡頭 (玩家)
-  const dirToPlayer = new THREE.Vector3().subVectors(camera.position, enemy.position).normalize();
-  const speed = isBoss ? 2.8 : (isElite ? 3.4 : 3.0);
+    // 檢查目標是在相機前方還是後方 (proj.z > 1 代表在相機後方)
+    const isBehind = proj.z > 1;
 
-  scene.add(projMesh);
-  enemyProjectiles.push({
-    mesh: projMesh,
-    sourceEnemy: enemy,
-    velocity: dirToPlayer.clone().multiplyScalar(speed),
-    deflected: false,
-    life: 5.0
-  });
-}
+    // 判斷是否在可視畫面內部 (留有 padding 裕度)
+    const isInScreen = !isBehind && 
+      proj.x >= -0.85 && proj.x <= 0.85 && 
+      proj.y >= -0.85 && proj.y <= 0.85;
 
-// 產生居合彈反金色火花
-function spawnParrySparks(pos) {
-  for (let i = 0; i < 24; i++) {
-    const geo = new THREE.TetrahedronGeometry(0.04);
-    const mat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0x00f7ff : 0xffe600 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.copy(pos);
-    const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 4,
-      (Math.random() - 0.5) * 4,
-      (Math.random() - 0.5) * 4
+    // 如果敵人已在螢幕舒適視野中，不需要顯示導引箭頭
+    if (isInScreen) return;
+
+    // 如果敵人在相機後方，方向需要水平與垂直反轉以引導玩家轉動視角
+    let screenDirX = proj.x;
+    let screenDirY = proj.y;
+    if (isBehind) {
+      screenDirX = -screenDirX;
+      screenDirY = -screenDirY;
+    }
+
+    // 計算指向敵人的角度
+    const angle = Math.atan2(screenDirY, screenDirX);
+
+    // 計算邊緣貼齊座標 (Ray cast 到螢幕矩形邊緣)
+    const halfW = (w / 2) - padding;
+    const halfH = (h / 2) - padding;
+
+    let edgeX = Math.cos(angle) * halfW;
+    let edgeY = Math.sin(angle) * halfH;
+
+    // 依比例縮放至矩形邊界
+    const scale = Math.min(
+      Math.abs(halfW / (edgeX || 0.0001)),
+      Math.abs(halfH / (edgeY || 0.0001))
     );
-    scene.add(mesh);
-    sparkParticles.push({ mesh: mesh, vel: vel, life: 0.4 });
+
+    const posX = (w / 2) + edgeX * scale;
+    // Three.js 投影 y 軸向上為正，螢幕 CSS y 軸向下為正，需反轉
+    const posY = (h / 2) - edgeY * scale;
+
+    // 計算旋轉角 (CSS 箭頭指向邊緣外側/目標方向)
+    const deg = -angle * (180 / Math.PI);
+
+    // 從指示器池中取出或創建元素
+    let el = indicatorElements[indicatorIdx];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'offscreen-indicator';
+      enemyIndicatorsContainer.appendChild(el);
+      indicatorElements.push(el);
+    }
+
+    const type = target.userData.type;
+    el.className = `offscreen-indicator indicator-${type}`;
+    const label = type === 'boss' ? '⚠️ BOSS' : (type === 'elite' ? '⚡ ELITE' : '🎯 敵機');
+    
+    el.innerHTML = `<span class="indicator-arrow" style="transform: rotate(${deg}deg)">➔</span><span>${label}</span>`;
+    el.style.left = `${posX}px`;
+    el.style.top = `${posY}px`;
+    el.style.display = 'flex';
+
+    indicatorIdx++;
+  });
+
+  // 隱藏多餘的指示器標籤
+  for (let i = indicatorIdx; i < indicatorElements.length; i++) {
+    indicatorElements[i].style.display = 'none';
   }
 }
 
@@ -824,14 +852,14 @@ function startStage(stageNum) {
     bossBarContainer.classList.add('boss-bar-hidden');
     // 生成 4 隻偵察小怪
     for (let i = 0; i < 4; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第一關！消滅所有偵察小怪，可用食指彈開光彈！";
+    guideTextEl.textContent = "第一關！瞄準並消滅所有浮游偵察機！";
   } else if (stageNum === 2) {
     stageBadge.textContent = "STAGE 2 · 精英突襲";
     bossBarContainer.classList.add('boss-bar-hidden');
     // 生成 3 隻小怪 + 1 隻精英小 BOSS
     spawnEnemy('elite');
     for (let i = 0; i < 3; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第二關！精英機登場！血量厚、會散射光彈！";
+    guideTextEl.textContent = "第二關！精英機登場！血量更厚，需多次命中！";
   } else if (stageNum === 3) {
     stageBadge.textContent = "STAGE 3 · BOSS 終局";
     // 觸發全螢幕 BOSS 警報
@@ -847,7 +875,7 @@ function startStage(stageNum) {
     // 召喚巨型 OMEGA BOSS + 2 隻僚機
     spawnEnemy('boss');
     for (let i = 0; i < 2; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "⚠️ 破壞神降臨！全神貫注，彈反所有重砲，消滅核心！";
+    guideTextEl.textContent = "⚠️ 破壞神降臨！蓄力出掌，全彈齊射消滅巨型核心！";
   }
 }
 
@@ -860,7 +888,6 @@ function checkStageCompletion() {
       resultTitle.textContent = `🎉 STAGE ${currentStage} CLEAR!`;
       resultSubtitle.textContent = "關卡完成！準備迎戰下一波";
       resultScore.textContent = score;
-      resultParry.textContent = `${parryCount} 次`;
       btnNextStage.classList.remove('hidden');
       btnRetry.classList.add('hidden');
       gameResultOverlay.classList.remove('hidden');
@@ -869,37 +896,10 @@ function checkStageCompletion() {
       resultTitle.textContent = "🏆 MISSION ACCOMPLISHED!";
       resultSubtitle.textContent = "恭喜你！成功消滅 OMEGA BOSS，守護現實世界！";
       resultScore.textContent = score;
-      resultParry.textContent = `${parryCount} 次`;
       btnNextStage.classList.add('hidden');
       btnRetry.classList.remove('hidden');
       gameResultOverlay.classList.remove('hidden');
     }
-  }
-}
-
-function takePlayerDamage(amount = 15) {
-  if (isGameOver) return;
-  playerHP = Math.max(0, playerHP - amount);
-  hpBarFill.style.width = `${playerHP}%`;
-  hpText.textContent = playerHP;
-
-  sound.playPlayerHit();
-  if (navigator.vibrate) navigator.vibrate([150, 60, 200]);
-
-  // 受擊螢幕紅框閃爍
-  damageOverlay.classList.add('flash');
-  setTimeout(() => damageOverlay.classList.remove('flash'), 120);
-
-  if (playerHP <= 0) {
-    isGameOver = true;
-    sound.playGameOver();
-    resultTitle.textContent = "💀 GAME OVER";
-    resultSubtitle.textContent = "機體護甲耗盡！";
-    resultScore.textContent = score;
-    resultParry.textContent = `${parryCount} 次`;
-    btnNextStage.classList.add('hidden');
-    btnRetry.classList.remove('hidden');
-    gameResultOverlay.classList.remove('hidden');
   }
 }
 
@@ -1148,44 +1148,6 @@ function onHandResults(results) {
     const indexTipPos = getLandmarkCameraPos(landmarks[8]);
     const indexTipDist = lastIndexWorldPos.distanceTo(indexTipPos);
     indexVelocity = indexTipDist / 0.033; // 約每幀速度 m/s
-    lastIndexWorldPos.copy(indexTipPos);
-
-    // 更新食指光刃視覺
-    parryBladeMesh.position.copy(indexTipPos);
-    parryBladeMesh.lookAt(camera.position);
-
-    // 食指快速揮動時光刃亮起 (居合刀光)
-    if (indexVelocity > 1.2 && !isFist) {
-      parryBladeMesh.material.opacity = 0.85;
-      const bladeScale = 1.0 + Math.min(2.0, indexVelocity * 0.5);
-      parryBladeMesh.scale.set(bladeScale, bladeScale, bladeScale);
-
-      // 檢查是否彈反敵方光彈
-      enemyProjectiles.forEach(proj => {
-        if (!proj.deflected && indexTipPos.distanceTo(proj.mesh.position) < 0.65) {
-          // ⚡ 彈反成功！
-          proj.deflected = true;
-          parryCount++;
-          sound.playDeflect();
-          if (navigator.vibrate) navigator.vibrate([40, 20, 80]);
-
-          // 火花爆發
-          spawnParrySparks(proj.mesh.position);
-
-          // 顯示 PARRY 橫幅
-          parryBanner.classList.remove('hidden');
-          setTimeout(() => parryBanner.classList.add('hidden'), 650);
-
-          // 光彈顏色反轉為青金色，速度倍增轟回敵人！
-          proj.mesh.material.color.setHex(0x00ffff);
-          const returnDir = new THREE.Vector3().subVectors(proj.sourceEnemy.position, proj.mesh.position).normalize();
-          proj.velocity = returnDir.multiplyScalar(7.5);
-        }
-      });
-    } else {
-      parryBladeMesh.material.opacity = Math.max(0, parryBladeMesh.material.opacity - 0.1);
-    }
-
     // 2. 中指指向瞄準
     if (!isFist) {
       const rawAimDir = computeMiddleFingerAimDirection(landmarks);
@@ -1221,7 +1183,7 @@ function onHandResults(results) {
         if (lockedTargets.length > 0) {
           statusEl.textContent = `🎯 多重鎖定: ${lockedTargets.length} 體 (LOCKED x${lockedTargets.length})！`;
           guideIconEl.textContent = "🔒";
-          guideTextEl.textContent = `已鎖定 ${lockedTargets.length} 體！繼續擺動可鎖更多，出掌全彈齊射！`;
+          guideTextEl.textContent = `已鎖定 ${lockedTargets.length} 體！出掌即可全彈齊射！`;
         } else {
           statusEl.textContent = "✊ 握拳中 (對準目標自動鎖定)";
           guideIconEl.textContent = "✊";
@@ -1237,9 +1199,9 @@ function onHandResults(results) {
       } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35)) {
         fireKiBlast();
       } else if (!isFist && !isPalmUp && lockedTargets.length === 0) {
-        statusEl.textContent = "🎯 中指指向瞄準 / 食指揮動彈反";
+        statusEl.textContent = "🎯 中指指向瞄準";
         guideIconEl.textContent = "👆";
-        guideTextEl.textContent = "以中指指向目標握拳鎖定；若有光彈飛來，用食指一揮彈掉！";
+        guideTextEl.textContent = "以中指指向目標握拳鎖定，出掌全彈齊射！";
       }
     }
 
@@ -1393,7 +1355,7 @@ function animate() {
     }
   }
 
-  // 敵人動畫與攻擊 AI
+  // 敵人浮游動畫 (無攻擊，休閒享受打靶爽快感！)
   targets.forEach(t => {
     t.rotation.x += t.userData.rotSpeedX * delta;
     t.rotation.y += t.userData.rotSpeedY * delta;
@@ -1403,65 +1365,10 @@ function animate() {
     if (t.userData.type === 'boss' && t.userData.satGroup) {
       t.userData.satGroup.rotation.z += delta * 2.5;
     }
-
-    // 敵人射擊倒數
-    t.userData.shootTimer -= delta;
-    if (t.userData.shootTimer <= 0) {
-      enemyFireProjectile(t);
-      // 根據敵人階級設定下次射擊間隔
-      const cooldown = t.userData.type === 'boss' ? 2.0 : (t.userData.type === 'elite' ? 3.0 : 4.5);
-      t.userData.shootTimer = cooldown + Math.random() * 1.5;
-    }
   });
 
-  // 敵方光彈飛行與碰撞檢測
-  for (let pIdx = enemyProjectiles.length - 1; pIdx >= 0; pIdx--) {
-    const proj = enemyProjectiles[pIdx];
-    proj.life -= delta;
-    proj.mesh.position.addScaledVector(proj.velocity, delta);
-
-    if (proj.deflected) {
-      // ⚡ 被彈反的光彈：飛回敵人身上
-      if (targets.includes(proj.sourceEnemy)) {
-        const dist = proj.mesh.position.distanceTo(proj.sourceEnemy.position);
-        if (dist < proj.sourceEnemy.userData.radius + 0.3) {
-          // 狠狠擊中敵人！
-          const hitDir = proj.velocity.clone().normalize();
-          destroyTarget(proj.sourceEnemy, proj.sourceEnemy.position.clone(), hitDir, 2);
-          scene.remove(proj.mesh);
-          enemyProjectiles.splice(pIdx, 1);
-          continue;
-        }
-      }
-    } else {
-      // 尚未被彈反的光彈：直撲相機鏡頭 (玩家)
-      const distToPlayer = proj.mesh.position.distanceTo(camera.position);
-      if (distToPlayer < 0.38) {
-        // 玩家受擊！
-        takePlayerDamage(15);
-        scene.remove(proj.mesh);
-        enemyProjectiles.splice(pIdx, 1);
-        continue;
-      }
-    }
-
-    if (proj.life <= 0) {
-      scene.remove(proj.mesh);
-      enemyProjectiles.splice(pIdx, 1);
-    }
-  }
-
-  // 居合彈反火花粒子更新
-  for (let sIdx = sparkParticles.length - 1; sIdx >= 0; sIdx--) {
-    const sp = sparkParticles[sIdx];
-    sp.life -= delta;
-    sp.mesh.position.addScaledVector(sp.vel, delta);
-    sp.mesh.scale.multiplyScalar(0.92);
-    if (sp.life <= 0) {
-      scene.remove(sp.mesh);
-      sparkParticles.splice(sIdx, 1);
-    }
-  }
+  // 更新螢幕外邊緣敵人雷達箭頭
+  updateOffscreenIndicators();
 
   // 物理碎片動畫更新
   for (let i = debrisList.length - 1; i >= 0; i--) {
