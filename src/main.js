@@ -463,18 +463,6 @@ const aimLine = new THREE.Line(aimLineGeo, aimLineMat);
 scene.add(aimLine);
 aimLine.visible = false;
 
-// 食指彈反刀刃光波 (Parry Blade Trail)
-const bladeGeo = new THREE.RingGeometry(0.02, 0.35, 16);
-const bladeMat = new THREE.MeshBasicMaterial({
-  color: 0x00f7ff,
-  side: THREE.DoubleSide,
-  transparent: true,
-  opacity: 0,
-  blending: THREE.AdditiveBlending
-});
-const parryBladeMesh = new THREE.Mesh(bladeGeo, bladeMat);
-scene.add(parryBladeMesh);
-
 // 多重鎖定框池
 const lockReticlePool = [];
 for (let i = 0; i < 5; i++) {
@@ -669,7 +657,7 @@ function spawnEnemy(type = 'drone', customPos = null) {
     }
   }
 
-  enemyGroup.userData = {
+  Object.assign(enemyGroup.userData, {
     type: type,
     hp: maxHp,
     maxHp: maxHp,
@@ -678,7 +666,7 @@ function spawnEnemy(type = 'drone', customPos = null) {
     rotSpeedY: (Math.random() - 0.5) * 2.0,
     baseY: enemyGroup.position.y,
     floatOffset: Math.random() * Math.PI * 2
-  };
+  });
 
   scene.add(enemyGroup);
   targets.push(enemyGroup);
@@ -1061,6 +1049,7 @@ function updateChargeUI() {
 // ==========================================
 let handsTracker = null;
 let currentStream = null;
+let isMediaPipeLoopRunning = false;
 
 async function setupWebcam() {
   if (currentStream) {
@@ -1082,7 +1071,9 @@ async function setupWebcam() {
     videoEl.srcObject = stream;
     await videoEl.play();
     statusEl.textContent = "AR 戰場就緒！請伸出手掌";
-    initMediaPipe();
+    if (!handsTracker) {
+      initMediaPipe();
+    }
   } catch (err) {
     console.error("相機存取失敗:", err);
     statusEl.textContent = "相機啟動失敗，請確認權限";
@@ -1109,21 +1100,24 @@ function initMediaPipe() {
 
   handsTracker.onResults(onHandResults);
 
-  let isProcessingFrame = false;
-  async function processVideoFrame() {
-    if (videoEl.readyState >= 2 && !isProcessingFrame) {
-      isProcessingFrame = true;
-      try {
-        await handsTracker.send({ image: videoEl });
-      } catch (err) {
-        console.error("Frame tracking error:", err);
-      } finally {
-        isProcessingFrame = false;
+  if (!isMediaPipeLoopRunning) {
+    isMediaPipeLoopRunning = true;
+    let isProcessingFrame = false;
+    async function processVideoFrame() {
+      if (videoEl.readyState >= 2 && videoEl.videoWidth > 0 && !isProcessingFrame) {
+        isProcessingFrame = true;
+        try {
+          await handsTracker.send({ image: videoEl });
+        } catch (err) {
+          console.error("Frame tracking error:", err);
+        } finally {
+          isProcessingFrame = false;
+        }
       }
+      requestAnimationFrame(processVideoFrame);
     }
     requestAnimationFrame(processVideoFrame);
   }
-  requestAnimationFrame(processVideoFrame);
 }
 
 // 處理手部追蹤與手勢判定
@@ -1457,12 +1451,12 @@ btnNextStage.addEventListener('click', () => {
 // 重新挑戰按鈕
 btnRetry.addEventListener('click', () => {
   gameResultOverlay.classList.add('hidden');
-  playerHP = 100;
-  hpBarFill.style.width = '100%';
-  hpText.textContent = '100';
   isGameOver = false;
   score = 0;
   scoreEl.textContent = '0';
+  // 清除場上殘留目標
+  targets.forEach(t => scene.remove(t));
+  targets.length = 0;
   startStage(1);
 });
 
