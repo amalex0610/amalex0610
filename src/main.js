@@ -274,6 +274,58 @@ class SoundSynthesizer {
     });
   }
 
+  // 敵機發射電漿砲音效
+  playEnemyShot() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(750, t);
+    osc.frequency.exponentialRampToValueAtTime(180, t + 0.18);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.005, t + 0.2);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  }
+
+  // 🛡️ 手刀彈刀金屬格擋音效 (Parry Clang)
+  playParry() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [1750, 2450].forEach(f => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t);
+      gain.gain.setValueAtTime(0.4, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+  }
+
+  // 💥 玩家護盾受擊破裂音效
+  playPlayerHurt() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.35);
+  }
+
   // ==========================================
   // 🎵 賽博龐克 Procedural BGM 合成音軌 (Web Audio API)
   // ==========================================
@@ -580,9 +632,55 @@ const resultScore = document.getElementById('result-score');
 const btnNextStage = document.getElementById('btn-next-stage');
 const btnRetry = document.getElementById('btn-retry');
 
+// 玩家護盾與波次管理 UI
+const waveBadge = document.getElementById('wave-badge');
+const shieldCellsEl = document.getElementById('shield-cells');
+const damageOverlay = document.getElementById('damage-overlay');
+const waveBanner = document.getElementById('wave-banner');
+const waveBannerText = document.getElementById('wave-banner-text');
+
+let playerShield = 3; // 3 格能量護盾
+let currentWave = 1;
+let totalWaves = 2;
+let enemyShootTimer = 0;
+
+// 更新玩家護盾 UI
+function updateShieldUI() {
+  if (!shieldCellsEl) return;
+  const icons = ['🖤🖤🖤', '🛡️🖤🖤', '🛡️🛡️🖤', '🛡️🛡️🛡️'];
+  shieldCellsEl.textContent = icons[playerShield] || '🖤🖤🖤';
+}
+
+// 玩家受傷判定
+function takeDamage(amount = 1) {
+  if (isGameOver || isStageTransition) return;
+  playerShield = Math.max(0, playerShield - amount);
+  updateShieldUI();
+
+  sound.playPlayerHurt();
+  triggerScreenShake();
+  if (navigator.vibrate) navigator.vibrate([120, 60, 200]);
+
+  if (damageOverlay) {
+    damageOverlay.classList.add('flash');
+    setTimeout(() => damageOverlay.classList.remove('flash'), 280);
+  }
+
+  if (playerShield <= 0) {
+    isGameOver = true;
+    sound.playGameOver();
+    resultTitle.textContent = "💥 能量護盾瓦解 (DEFEAT)";
+    resultSubtitle.textContent = `在第 ${currentStage} 關遭到擊墜！請善用手刀朝敵彈揮擊彈碎敵襲！`;
+    resultScore.textContent = score;
+    btnNextStage.classList.add('hidden');
+    btnRetry.classList.remove('hidden');
+    gameResultOverlay.classList.remove('hidden');
+  }
+}
+
 // 玩家與關卡數值
 let score = 0;
-let currentStage = 1; // 1: 小怪波, 2: 精英波, 3: 大 BOSS
+let currentStage = 1;
 let isStageTransition = false;
 let isGameOver = false;
 
@@ -1056,18 +1154,58 @@ function createSlicedHalvesEffect(pos, radius, colorHex, sliceNormal, slashMesh)
   });
 }
 
+// 生成敵機電漿光彈 (朝玩家攝影機方向射出)
+function spawnEnemyProjectile(fromPos) {
+  const projGroup = new THREE.Group();
+  projGroup.position.copy(fromPos);
+
+  const coreGeo = new THREE.SphereGeometry(0.13, 12, 12);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+  const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+  projGroup.add(coreMesh);
+
+  const ringGeo = new THREE.RingGeometry(0.15, 0.26, 16);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xff7700,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  projGroup.add(ringMesh);
+
+  // 朝向攝影機鏡頭
+  const flyDir = new THREE.Vector3().subVectors(camera.position, fromPos).normalize();
+  projGroup.lookAt(camera.position);
+
+  scene.add(projGroup);
+  sound.playEnemyShot();
+
+  enemyProjectiles.push({
+    mesh: projGroup,
+    ring: ringMesh,
+    velocity: flyDir.multiplyScalar(2.6), // 2.6 m/s 飛向玩家鏡頭 (反應時間充裕，便於手刀彈刀)
+    life: 3.5
+  });
+}
+
 // 生成各種類型的敵人
 function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
   const enemyGroup = new THREE.Group();
-  let maxHp = 1;
+  let maxHp = 3;
   let radius = 0.45;
   let rotSpeedX = (Math.random() - 0.5) * 1.5;
   let rotSpeedY = (Math.random() - 0.5) * 2.0;
+  let canShoot = false;
+  let shootInterval = 4.0;
+  let shootTimer = 2.0;
 
   if (type === 'drone') {
-    // 【基本小怪】：機動浮游晶石
-    maxHp = 1;
+    // 【基本小怪】：機動浮游晶石 (HP 3)
+    maxHp = 3;
     radius = 0.4;
+    canShoot = false;
     const geo = new THREE.OctahedronGeometry(0.35, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0xff0055,
@@ -1083,9 +1221,12 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     const shieldMat = new THREE.MeshBasicMaterial({ color: 0x00f7ff, transparent: true, opacity: 0.7 });
     enemyGroup.add(new THREE.Mesh(shieldGeo, shieldMat));
   } else if (type === 'speedy') {
-    // 【疾速僚機】：青色高速浮游菱晶 (機動性高、自轉極快)
-    maxHp = 2;
-    radius = 0.35;
+    // 【疾速僚機】：青色高速浮游菱晶 (HP 6，機動蛇行、發射電漿)
+    maxHp = 6;
+    radius = 0.38;
+    canShoot = true;
+    shootInterval = 4.0 + Math.random() * 2.0;
+    shootTimer = 1.8 + Math.random() * 2.0;
     rotSpeedX = (Math.random() - 0.5) * 3.5;
     rotSpeedY = (Math.random() - 0.5) * 4.2;
     const geo = new THREE.ConeGeometry(0.3, 0.6, 5);
@@ -1106,9 +1247,10 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     );
     enemyGroup.add(ring);
   } else if (type === 'armored') {
-    // 【重裝護甲機】：赤橙色多面重型無人機 (HP 高、護甲厚)
-    maxHp = 8;
-    radius = 0.55;
+    // 【重裝護甲機】：赤橙色多面重型無人機 (HP 18，厚實護甲，普通氣功波減傷 50%)
+    maxHp = 18;
+    radius = 0.58;
+    canShoot = false;
     const geo = new THREE.DodecahedronGeometry(0.5, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0xff4400,
@@ -1126,9 +1268,12 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     );
     enemyGroup.add(ring);
   } else if (type === 'elite') {
-    // 【精英機】：雙重旋轉光環精英戰機
-    maxHp = 6;
-    radius = 0.65;
+    // 【精英機】：雙重旋轉光環精英戰機 (HP 28，主動連射電漿)
+    maxHp = 28;
+    radius = 0.68;
+    canShoot = true;
+    shootInterval = 3.2 + Math.random() * 1.2;
+    shootTimer = 1.2 + Math.random() * 1.5;
     const geo = new THREE.IcosahedronGeometry(0.55, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffaa00,
@@ -1151,9 +1296,12 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     enemyGroup.add(ring1);
     enemyGroup.add(ring2);
   } else if (type === 'miniboss') {
-    // 【中階母艦】：深紅巨艦 + 3 顆環繞浮游護盾衛星
-    maxHp = 18;
-    radius = 0.9;
+    // 【中階母艦】：深紅巨艦 + 3 顆環繞浮游護盾衛星 (HP 60，兇猛火力)
+    maxHp = 60;
+    radius = 0.95;
+    canShoot = true;
+    shootInterval = 2.4 + Math.random() * 0.8;
+    shootTimer = 1.0;
     const geo = new THREE.IcosahedronGeometry(0.8, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0xee0077,
@@ -1176,9 +1324,12 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     enemyGroup.add(satGroup);
     enemyGroup.userData.satGroup = satGroup;
   } else if (type === 'boss') {
-    // 【大 BOSS】：巨型 OMEGA 毀滅星核 + 6 顆護盾衛星
-    maxHp = 55;
-    radius = 1.2;
+    // 【大 BOSS】：巨型 OMEGA 毀滅星核 + 6 顆護盾衛星 (HP 160，極限壓迫感)
+    maxHp = 160;
+    radius = 1.25;
+    canShoot = true;
+    shootInterval = 1.8 + Math.random() * 0.6;
+    shootTimer = 0.8;
     const geo = new THREE.DodecahedronGeometry(1.0, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x8800ff,
@@ -1229,7 +1380,12 @@ function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
     rotSpeedX: rotSpeedX,
     rotSpeedY: rotSpeedY,
     baseY: enemyGroup.position.y,
-    floatOffset: Math.random() * Math.PI * 2
+    baseX: enemyGroup.position.x,
+    floatOffset: Math.random() * Math.PI * 2,
+    canShoot: canShoot,
+    shootTimer: shootTimer,
+    shootInterval: shootInterval,
+    isArmored: type === 'armored'
   });
 
   scene.add(enemyGroup);
@@ -1344,7 +1500,12 @@ function updateOffscreenIndicators() {
 
 // 破壞目標：扣血與碎裂
 function destroyTarget(targetGroup, hitPoint, blastDir, damage = 1) {
-  targetGroup.userData.hp -= damage;
+  // 重裝敵機對普通氣功波 (damage <= 3) 具備 50% 裝甲減傷，唯氣圓斬與神極砲可無視護甲完全貫穿！
+  let effectiveDamage = damage;
+  if (targetGroup.userData.type === 'armored' && damage <= 3) {
+    effectiveDamage = Math.max(1, Math.floor(damage * 0.5));
+  }
+  targetGroup.userData.hp -= effectiveDamage;
 
   // 更新 BOSS 血條 (若受傷者為 BOSS 或巡航巨艦)
   if (targetGroup.userData.type === 'boss' || targetGroup.userData.type === 'miniboss') {
@@ -1409,11 +1570,190 @@ function destroyTarget(targetGroup, hitPoint, blastDir, damage = 1) {
   checkStageCompletion();
 }
 
+// 播放戰術波次提示橫幅
+function showWaveBanner(stageNum, waveNum) {
+  if (!waveBanner || !waveBannerText) return;
+  const isFinalWave = waveNum === totalWaves;
+  waveBannerText.innerHTML = isFinalWave
+    ? `⚠️ WAVE ${waveNum}/${totalWaves} · 敵軍主力增援！`
+    : `⚔️ WAVE ${waveNum}/${totalWaves} · 敵軍前鋒進逼！`;
+  waveBanner.classList.remove('hidden');
+  waveBanner.classList.remove('animate');
+  void waveBanner.offsetWidth;
+  waveBanner.classList.add('animate');
+  setTimeout(() => {
+    waveBanner.classList.add('hidden');
+  }, 2200);
+}
+
+// 關卡與波次敵軍配置 (10 Stages x 2 Waves)
+function spawnStageWave(stageNum, waveNum) {
+  showWaveBanner(stageNum, waveNum);
+  if (waveBadge) waveBadge.textContent = `W${waveNum}/${totalWaves}`;
+
+  if (stageNum === 1) {
+    if (waveNum === 1) {
+      for (let i = 0; i < 3; i++) spawnEnemy('drone');
+      guideTextEl.textContent = "第一關！掌心對準瞄準推掌發射！注意敵彈，用手刀朝彈體揮擊彈刀！";
+    } else {
+      for (let i = 0; i < 3; i++) spawnEnemy('drone');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第一關波次 2！疾速僚機加入戰局，手刀揮擊可完美彈刀！";
+    }
+  } else if (stageNum === 2) {
+    if (waveNum === 1) {
+      for (let i = 0; i < 3; i++) spawnEnemy('drone');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第二關！握緊拳頭多重鎖定後全彈齊射！";
+    } else {
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      spawnEnemy('armored');
+      guideTextEl.textContent = "第二關波次 2！重裝護甲機降臨，普通氣功波減傷 50%，需強力連擊！";
+    }
+  } else if (stageNum === 3) {
+    if (waveNum === 1) {
+      for (let i = 0; i < 2; i++) spawnEnemy('drone');
+      spawnEnemy('elite');
+      guideTextEl.textContent = "第三關！黃金精英機登場！主動連射電漿砲，請務必手刀格擋！";
+    } else {
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      spawnEnemy('elite');
+      guideTextEl.textContent = "第三關波次 2！精英雙翼夾擊！左下角按住【⚡ 共鳴】神極砲貫穿！";
+    }
+  } else if (stageNum === 4) {
+    if (waveNum === 1) {
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      spawnEnemy('armored');
+      guideTextEl.textContent = "第四關！超高速電磁機動僚機來襲，考驗靈敏瞄準！";
+    } else {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('elite');
+      guideTextEl.textContent = "第四關波次 2！雙重重裝前鋒！集滿能量手刀劈下，氣圓斬一刀切兩半！";
+    }
+  } else if (stageNum === 5) {
+    if (waveNum === 1) {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第五關！護衛艦隊強襲！消滅前鋒迎擊巡航巨艦！";
+    } else {
+      sound.playBossAlert();
+      bossWarningBanner.classList.remove('hidden');
+      setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
+      bossBarContainer.classList.remove('boss-bar-hidden');
+      bossNameEl.textContent = "DREADNOUGHT · 巡航巨艦 (HP 60)";
+      bossBarFill.style.width = '100%';
+      bossHpText.textContent = '100%';
+
+      spawnEnemy('miniboss', null, 60);
+      spawnEnemy('drone');
+      spawnEnemy('drone');
+      guideTextEl.textContent = "⚠️ 第五關警報！巡航巨艦降臨！集滿能量手刀劈下，氣圓斬切成兩半！";
+    }
+  } else if (stageNum === 6) {
+    if (waveNum === 1) {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第六關！重型能量護盾機群，握拳鎖定全彈追尾齊射！";
+    } else {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('elite');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第六關波次 2！敵方精銳部隊！左下角拇指共鳴釋放毀滅神極砲！";
+    }
+  } else if (stageNum === 7) {
+    if (waveNum === 1) {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第七關！敵軍突擊陣型，留意電漿彈雨，手刀迅速揮砍格擋！";
+    } else {
+      spawnEnemy('elite', new THREE.Vector3(-0.9, 0.2, -3.8), 28);
+      spawnEnemy('elite', new THREE.Vector3(0.9, 0.2, -3.8), 28);
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第七關波次 2！雙子精英戰機聯手出擊，注意螢幕邊緣雷達箭頭！";
+    }
+  } else if (stageNum === 8) {
+    if (waveNum === 1) {
+      spawnEnemy('elite', null, 28);
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第八關！母艦前哨護衛隊！迅速消滅以迎戰雙重母艦！";
+    } else {
+      sound.playBossAlert();
+      bossWarningBanner.classList.remove('hidden');
+      setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
+      bossBarContainer.classList.remove('boss-bar-hidden');
+      bossNameEl.textContent = "TWIN TITANS · 雙子巨艦 (HP 90)";
+      bossBarFill.style.width = '100%';
+      bossHpText.textContent = '100%';
+
+      spawnEnemy('miniboss', new THREE.Vector3(-1.1, 0.25, -4.0), 45);
+      spawnEnemy('miniboss', new THREE.Vector3(1.1, 0.25, -4.0), 45);
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "⚠️ 第八關警告！雙重巨艦同時壓境，全力蓄力氣圓斬轟殺！";
+    }
+  } else if (stageNum === 9) {
+    if (waveNum === 1) {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('elite');
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第九關！敵軍全主力大混戰！消滅所有敵人，迎向終局之戰！";
+    } else {
+      spawnEnemy('armored');
+      spawnEnemy('armored');
+      spawnEnemy('elite');
+      spawnEnemy('miniboss', null, 50);
+      guideTextEl.textContent = "第九關波次 2！決戰前夕死鬥！左下拇指共鳴神極砲清場！";
+    }
+  } else if (stageNum === 10) {
+    if (waveNum === 1) {
+      spawnEnemy('elite', new THREE.Vector3(-1.1, 0.2, -3.8), 28);
+      spawnEnemy('elite', new THREE.Vector3(1.1, 0.2, -3.8), 28);
+      spawnEnemy('armored');
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "第十關前鋒！突破護衛星群，準備迎戰破壞神！";
+    } else {
+      sound.playBossAlert();
+      bossWarningBanner.classList.remove('hidden');
+      setTimeout(() => bossWarningBanner.classList.add('hidden'), 2800);
+      bossBarContainer.classList.remove('boss-bar-hidden');
+      bossNameEl.textContent = "OMEGA DESTROYER · 毀滅星核 (HP 160)";
+      bossBarFill.style.width = '100%';
+      bossHpText.textContent = '100%';
+
+      spawnEnemy('boss', null, 160);
+      spawnEnemy('elite', new THREE.Vector3(-1.3, -0.2, -3.8), 24);
+      spawnEnemy('elite', new THREE.Vector3(1.3, -0.2, -3.8), 24);
+      spawnEnemy('speedy');
+      spawnEnemy('speedy');
+      guideTextEl.textContent = "⚠️ 終局之戰！消滅 OMEGA 毀滅星核，拯救現實世界！";
+    }
+  }
+}
+
 // ==========================================
-// 7. 關卡進程管理 (Stage Progression: 10 關史詩戰役)
+// 7. 關卡進程管理 (Stage Progression: 10 關史詩戰役，每關 2 波次)
 // ==========================================
 function startStage(stageNum) {
   currentStage = stageNum;
+  currentWave = 1;
+  totalWaves = 2;
   isStageTransition = false;
   
   // 清理現有光彈與鎖定
@@ -1422,107 +1762,50 @@ function startStage(stageNum) {
   lockedTargets = [];
   lockReticlePool.forEach(r => r.visible = false);
 
-  if (stageNum === 1) {
-    stageBadge.textContent = "STAGE 1 · 初試啼聲";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    for (let i = 0; i < 4; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第一關！掌心對準瞄準，向前推掌發射氣功！";
-  } else if (stageNum === 2) {
-    stageBadge.textContent = "STAGE 2 · 蜂群突圍";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    for (let i = 0; i < 5; i++) spawnEnemy('drone');
-    spawnEnemy('speedy');
-    guideTextEl.textContent = "第二關！敵機增加，握緊拳頭多重鎖定後全彈齊射！";
-  } else if (stageNum === 3) {
-    stageBadge.textContent = "STAGE 3 · 精英前鋒";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    spawnEnemy('elite');
-    for (let i = 0; i < 3; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第三關！黃金精英機登場！血量厚實，需多次連續命中！";
-  } else if (stageNum === 4) {
-    stageBadge.textContent = "STAGE 4 · 疾速攔截";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    for (let i = 0; i < 3; i++) spawnEnemy('speedy');
-    for (let i = 0; i < 2; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第四關！超高速電磁機動僚機來襲，考驗靈敏瞄準！";
-  } else if (stageNum === 5) {
-    stageBadge.textContent = "STAGE 5 · 巡航巨艦 (MID-BOSS)";
-    sound.playBossAlert();
-    bossWarningBanner.classList.remove('hidden');
-    setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
+  bossBarContainer.classList.add('boss-bar-hidden');
 
-    bossBarContainer.classList.remove('boss-bar-hidden');
-    bossNameEl.textContent = "DREADNOUGHT · 巡航巨艦";
-    bossBarFill.style.width = '100%';
-    bossHpText.textContent = '100%';
+  const stageTitles = [
+    "",
+    "STAGE 1 · 初試啼聲",
+    "STAGE 2 · 蜂群突圍",
+    "STAGE 3 · 精英前鋒",
+    "STAGE 4 · 疾速攔截",
+    "STAGE 5 · 巡航巨艦 (MID-BOSS)",
+    "STAGE 6 · 重裝防線",
+    "STAGE 7 · 雙子精英",
+    "STAGE 8 · 雙重母艦 (TWIN BOSS)",
+    "STAGE 9 · 毀滅前夕",
+    "STAGE 10 · 終焉・破壞神降臨"
+  ];
+  stageBadge.textContent = stageTitles[stageNum] || `STAGE ${stageNum}`;
 
-    spawnEnemy('miniboss');
-    for (let i = 0; i < 2; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "⚠️ 第五關警報！巡航巨艦降臨！集滿能量手刀劈下，氣圓斬一刀切開！";
-  } else if (stageNum === 6) {
-    stageBadge.textContent = "STAGE 6 · 重裝防線";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    for (let i = 0; i < 2; i++) spawnEnemy('armored');
-    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
-    guideTextEl.textContent = "第六關！重型能量護盾機群，握拳鎖定全彈追尾齊射！";
-  } else if (stageNum === 7) {
-    stageBadge.textContent = "STAGE 7 · 雙子精英";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    spawnEnemy('elite', new THREE.Vector3(-0.9, 0.2, -3.8), 7);
-    spawnEnemy('elite', new THREE.Vector3(0.9, 0.2, -3.8), 7);
-    for (let i = 0; i < 3; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第七關！雙子精英戰機聯手出擊，注意螢幕邊緣雷達箭頭！";
-  } else if (stageNum === 8) {
-    stageBadge.textContent = "STAGE 8 · 雙重母艦 (TWIN BOSS)";
-    sound.playBossAlert();
-    bossWarningBanner.classList.remove('hidden');
-    setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
-
-    bossBarContainer.classList.remove('boss-bar-hidden');
-    bossNameEl.textContent = "TWIN TITANS · 雙子巨艦";
-    bossBarFill.style.width = '100%';
-    bossHpText.textContent = '100%';
-
-    spawnEnemy('miniboss', new THREE.Vector3(-1.1, 0.25, -4.0), 16);
-    spawnEnemy('miniboss', new THREE.Vector3(1.1, 0.25, -4.0), 16);
-    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
-    guideTextEl.textContent = "⚠️ 第八關警告！雙重巨艦同時壓境，全力蓄力氣圓斬轟殺！";
-  } else if (stageNum === 9) {
-    stageBadge.textContent = "STAGE 9 · 毀滅前夕";
-    bossBarContainer.classList.add('boss-bar-hidden');
-    spawnEnemy('armored', null, 9);
-    spawnEnemy('armored', null, 9);
-    spawnEnemy('elite', null, 7);
-    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
-    guideTextEl.textContent = "第九關！敵軍全主力大混戰！消滅所有敵人，迎向終局之戰！";
-  } else if (stageNum === 10) {
-    stageBadge.textContent = "STAGE 10 · 終焉・破壞神降臨";
-    sound.playBossAlert();
-    bossWarningBanner.classList.remove('hidden');
-    setTimeout(() => bossWarningBanner.classList.add('hidden'), 2800);
-
-    bossBarContainer.classList.remove('boss-bar-hidden');
-    bossNameEl.textContent = "OMEGA DESTROYER · 毀滅星核";
-    bossBarFill.style.width = '100%';
-    bossHpText.textContent = '100%';
-
-    spawnEnemy('boss', null, 60);
-    spawnEnemy('elite', new THREE.Vector3(-1.3, -0.2, -3.8), 6);
-    spawnEnemy('elite', new THREE.Vector3(1.3, -0.2, -3.8), 6);
-    spawnEnemy('speedy');
-    spawnEnemy('speedy');
-    guideTextEl.textContent = "⚠️ 終局之戰！消滅 OMEGA 毀滅星核，拯救現實世界！";
-  }
+  spawnStageWave(stageNum, 1);
 }
 
 function checkStageCompletion() {
   if (targets.length === 0 && !isStageTransition && !isGameOver) {
+    if (currentWave < totalWaves) {
+      // 推進到第 2 波次！
+      currentWave++;
+      setTimeout(() => {
+        if (!isGameOver && !isStageTransition) {
+          spawnStageWave(currentStage, currentWave);
+        }
+      }, 900);
+      return;
+    }
+
+    // 關卡全部波次通關！
     isStageTransition = true;
     sound.playStageClear();
 
+    // 通關恢復 1 格護盾
+    playerShield = Math.min(3, playerShield + 1);
+    updateShieldUI();
+
     if (currentStage < 10) {
       resultTitle.textContent = `🎉 STAGE ${currentStage} CLEAR!`;
-      resultSubtitle.textContent = `第 ${currentStage} 關完成！準備迎戰第 ${currentStage + 1} 關`;
+      resultSubtitle.textContent = `第 ${currentStage} 關完成！護盾充能 +1！準備迎戰第 ${currentStage + 1} 關`;
       resultScore.textContent = score;
       btnNextStage.textContent = `進入第 ${currentStage + 1} 關 ➔`;
       btnNextStage.classList.remove('hidden');
@@ -2148,17 +2431,90 @@ function animate() {
     }
   }
 
-  // 敵人浮游動畫 (無攻擊，休閒享受打靶爽快感！)
+  // 敵人浮游與主動射擊動畫
   targets.forEach(t => {
     t.rotation.x += t.userData.rotSpeedX * delta;
     t.rotation.y += t.userData.rotSpeedY * delta;
     t.position.y = t.userData.baseY + Math.sin(elapsedTime * 2 + t.userData.floatOffset) * 0.15;
 
+    // 疾速僚機蛇行左右規避 (Zig-Zag Evasion)
+    if (t.userData.type === 'speedy' && t.userData.baseX !== undefined) {
+      t.position.x = t.userData.baseX + Math.sin(elapsedTime * 3.5 + t.userData.floatOffset) * 0.35;
+    }
+
     // BOSS 與巨艦護盾衛星環繞旋轉
     if (t.userData.satGroup) {
       t.userData.satGroup.rotation.z += delta * (t.userData.type === 'boss' ? 2.5 : 3.5);
     }
+
+    // 敵人主動發射電漿砲
+    if (t.userData.canShoot && !isGameOver && !isStageTransition) {
+      t.userData.shootTimer -= delta;
+      if (t.userData.shootTimer <= 0) {
+        spawnEnemyProjectile(t.position);
+        t.userData.shootTimer = t.userData.shootInterval || 3.5;
+      }
+    }
   });
+
+  // 敵機電漿光彈飛行動畫與手刀格擋 (Parry) / 傷害檢測
+  const palmWorldPos = isHandDetected ? getPalmWorldPosition() : null;
+  for (let pIdx = enemyProjectiles.length - 1; pIdx >= 0; pIdx--) {
+    const proj = enemyProjectiles[pIdx];
+    proj.life -= delta;
+    proj.mesh.position.addScaledVector(proj.velocity, delta);
+    if (proj.ring) proj.ring.rotation.z += delta * 12;
+
+    // 1. 🛡️ 手刀彈刀格擋 (Parry / Deflect)
+    // 玩家手掌在畫面中，且電漿彈靠近手掌範圍 (< 0.85m 寬容判定)
+    if (palmWorldPos && !isGameOver) {
+      const distToHand = proj.mesh.position.distanceTo(palmWorldPos);
+      if (distToHand < 0.85) {
+        sound.playParry();
+        triggerScreenShake();
+        if (navigator.vibrate) navigator.vibrate([40, 20, 80]);
+
+        // 產生金色格擋火花
+        for (let s = 0; s < 12; s++) {
+          const sparkGeo = new THREE.TetrahedronGeometry(0.04 + Math.random() * 0.05);
+          const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
+          const spark = new THREE.Mesh(sparkGeo, sparkMat);
+          spark.position.copy(proj.mesh.position);
+          const spSpeed = 3.0 + Math.random() * 3.0;
+          spark.userData = {
+            velocity: new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2).normalize().multiplyScalar(spSpeed),
+            rotVel: new THREE.Vector3(5, 5, 5),
+            life: 0.4
+          };
+          scene.add(spark);
+          debrisList.push(spark);
+        }
+
+        guideTextEl.textContent = "🛡️ 完美手刀格擋 (PARRY)！彈碎敵軍電漿砲！";
+        score += 2;
+        scoreEl.textContent = score;
+
+        scene.remove(proj.mesh);
+        enemyProjectiles.splice(pIdx, 1);
+        continue;
+      }
+    }
+
+    // 2. 💥 擊中玩家 (靠近相機鏡頭 < 0.75m)
+    const distToCam = proj.mesh.position.distanceTo(camera.position);
+    if (distToCam < 0.75) {
+      takeDamage(1);
+      scene.remove(proj.mesh);
+      enemyProjectiles.splice(pIdx, 1);
+      continue;
+    }
+
+    // 3. 超出射程或生命歸零
+    if (proj.life <= 0) {
+      scene.remove(proj.mesh);
+      enemyProjectiles.splice(pIdx, 1);
+    }
+  }
 
   // 更新螢幕外邊緣敵人雷達箭頭
   updateOffscreenIndicators();
@@ -2202,6 +2558,8 @@ onResize();
 // 首次啟動按鈕
 document.getElementById('btn-start').addEventListener('click', () => {
   document.getElementById('start-overlay').style.display = 'none';
+  playerShield = 3;
+  updateShieldUI();
   sound.init();
   sound.startBGM(); // 啟動震撼賽博龐克背景音樂
   setupWebcam();
@@ -2315,6 +2673,8 @@ btnNextStage.addEventListener('click', () => {
 btnRetry.addEventListener('click', () => {
   gameResultOverlay.classList.add('hidden');
   isGameOver = false;
+  playerShield = 3;
+  updateShieldUI();
   score = 0;
   scoreEl.textContent = '0';
   // 清除場上殘留目標

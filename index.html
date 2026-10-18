@@ -39,13 +39,27 @@
       <!-- ⚡ 全螢幕邊緣共鳴電光氣焰覆蓋層 -->
       <div id="resonance-overlay"></div>
 
+      <!-- 💥 受到攻擊受傷紅框閃爍覆蓋層 -->
+      <div id="damage-overlay"></div>
+
+      <!-- 🌊 波次推進橫幅 (WAVE 2/2 敵軍增援) -->
+      <div id="wave-banner" class="hidden">
+        <span class="wave-icon">⚡</span> <span id="wave-banner-text">WAVE 2/2 · 敵軍主力增援！</span>
+      </div>
+
       <!-- UI HUD 介面 -->
       <div id="hud-overlay">
         <!-- 頂部資訊列 -->
         <header class="hud-header">
-          <!-- 關卡標籤 -->
+          <!-- 關卡與波次標籤 -->
           <div class="stage-box">
             <span id="stage-badge">STAGE 1</span>
+            <span id="wave-badge" class="wave-tag">W1</span>
+          </div>
+
+          <!-- 玩家能量防護罩 -->
+          <div class="hp-box" id="player-shield-box" title="玩家防護罩 (遭敵彈命中會扣減)">
+            <span id="shield-cells">🛡️🛡️🛡️</span>
           </div>
 
           <!-- 頂部快速切換快捷列 -->
@@ -192,7 +206,12 @@
             <div class="t-section highlight-t-section resonance-section">
               <div class="t-badge cyan-badge">奧義 2</div>
               <h3>⚡ 拇指共鳴・神極能量砲！</h3>
-              <p>一隻手拿手機，<b>握手機的拇指長按右下角【⚡ 神極共鳴】</b>，另一手在鏡頭前推掌，即可釋放<b>貫穿全場敵機</b>的毀滅級超粗能量神砲！</p>
+              <p>右手揮拳時，<b>左手握機的拇指長按左下角【⚡ 神極共鳴】</b>，右手向前推掌，即可釋放<b>貫穿全場敵機</b>的毀滅級超粗能量神砲！</p>
+            </div>
+            <div class="t-section highlight-t-section parry-section">
+              <div class="t-badge gold-badge">防禦秘技</div>
+              <h3>🛡️ 手刀彈刀（Parry）彈碎敵彈！</h3>
+              <p>精英機與母艦會對玩家發射電漿光彈！只要用手掌<b>朝著飛來的敵彈揮動或出掌</b>，即可<b>將敵彈當場彈碎</b>，保護 3 格防護罩完好！</p>
             </div>
             <div class="t-section">
               <div class="t-badge">貼心功能</div>
@@ -232,7 +251,11 @@
             </div>
             <div class="step-item highlight-step resonance-step">
               <span class="step-num">⚡</span>
-              <span><b>拇指共鳴奧義</b>：拇指按住<b>【⚡ 共鳴】</b>＋推掌發射全屏貫穿神砲！</span>
+              <span><b>拇指共鳴奧義</b>：左手拇指按<b>【⚡ 共鳴】</b>＋推掌發射全屏貫穿神砲！</span>
+            </div>
+            <div class="step-item parry-step">
+              <span class="step-num parry-num">🛡️</span>
+              <span><b>手刀彈刀格擋</b>：手掌朝飛來的敵彈揮拍，彈碎敵襲保命！</span>
             </div>
           </div>
 

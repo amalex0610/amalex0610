@@ -136,6 +136,19 @@ html, body {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 0 12px rgba(255, 140, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wave-tag {
+  background: rgba(0, 247, 255, 0.3);
+  color: #00f7ff;
+  border-radius: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  border: 1px solid rgba(0, 247, 255, 0.6);
 }
 
 .hud-status-row {
@@ -1019,13 +1032,43 @@ html, body {
   100% { transform: translate(-50%, -75%) scale(0.85); opacity: 0; }
 }
 
-/* ⚡ 拇指共鳴按鈕 (右側浮動圓鈕，單手握持拇指專用) */
+/* 🌊 波次推進橫幅 (WAVE 2/2 敵軍增援) */
+#wave-banner {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.05);
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.95), rgba(255, 0, 80, 0.95));
+  color: #fff;
+  font-weight: 900;
+  font-size: 19px;
+  padding: 10px 24px;
+  border-radius: 30px;
+  border: 2px solid #ffcc00;
+  box-shadow: 0 0 35px rgba(255, 140, 0, 0.8);
+  z-index: 70;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  animation: wave-banner-pop 0.95s ease-out forwards;
+}
+
+@keyframes wave-banner-pop {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  75% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -65%) scale(0.9); opacity: 0; }
+}
+
+/* ⚡ 拇指共鳴按鈕 (畫面左下角浮動圓鈕，右手玩家左手握機拇指專用) */
 .resonance-btn {
   position: absolute;
   bottom: 125px;
-  right: 16px;
-  width: 68px;
-  height: 68px;
+  left: 18px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: rgba(10, 25, 45, 0.88);
   border: 2px solid #00f7ff;
