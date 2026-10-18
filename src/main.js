@@ -165,70 +165,54 @@ class SoundSynthesizer {
     }
   }
 
-  // ⚡ 食指居合彈反金屬撞擊音 (鏘！！！清脆極致)
-  playDeflect() {
+  // 💿 氣圓斬高速旋刃破空音效 (高頻電鋸切割嘯叫)
+  playKienzanLaunch() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    
-    // 主金屬碰擊音
-    const osc1 = this.ctx.createOscillator();
-    const gain1 = this.ctx.createGain();
-    osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(2400, t);
-    osc1.frequency.exponentialRampToValueAtTime(800, t + 0.25);
-    gain1.gain.setValueAtTime(0.5, t);
-    gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-    osc1.connect(gain1);
-    gain1.connect(this.ctx.destination);
-    osc1.start(t);
-    osc1.stop(t + 0.35);
 
-    // 高頻清脆金屬泛音 (Bell ping)
-    const osc2 = this.ctx.createOscillator();
-    const gain2 = this.ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(3600, t);
-    osc2.frequency.exponentialRampToValueAtTime(1800, t + 0.4);
-    gain2.gain.setValueAtTime(0.4, t);
-    gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-    osc2.connect(gain2);
-    gain2.connect(this.ctx.destination);
-    osc2.start(t);
-    osc2.stop(t + 0.45);
+    // 高速旋轉電鋸切割聲
+    const sawOsc = this.ctx.createOscillator();
+    const sawGain = this.ctx.createGain();
+    sawOsc.type = 'sawtooth';
+    sawOsc.frequency.setValueAtTime(680, t);
+    sawOsc.frequency.exponentialRampToValueAtTime(1950, t + 0.18);
+    sawOsc.frequency.exponentialRampToValueAtTime(1100, t + 0.65);
+
+    // 調頻顫音模擬圓盤高速轉動
+    const lfo = this.ctx.createOscillator();
+    const lfoGain = this.ctx.createGain();
+    lfo.frequency.setValueAtTime(45, t);
+    lfoGain.gain.setValueAtTime(180, t);
+    lfo.connect(sawOsc.frequency);
+
+    sawGain.gain.setValueAtTime(0.32, t);
+    sawGain.gain.exponentialRampToValueAtTime(0.01, t + 0.68);
+
+    sawOsc.connect(sawGain);
+    sawGain.connect(this.ctx.destination);
+    sawOsc.start(t);
+    lfo.start(t);
+    sawOsc.stop(t + 0.68);
+    lfo.stop(t + 0.68);
   }
 
-  // 敵方雷射發射音
-  playEnemyShoot() {
+  // ⚔️ 氣圓斬一刀兩斷斬擊音效
+  playKienzanSlice() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(750, t);
-    osc.frequency.exponentialRampToValueAtTime(140, t + 0.22);
-    gain.gain.setValueAtTime(0.2, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(3200, t);
+    osc.frequency.exponentialRampToValueAtTime(280, t + 0.25);
+    gain.gain.setValueAtTime(0.55, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.25);
-  }
-
-  // 玩家受擊重音
-  playPlayerHit() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(120, t);
-    osc.frequency.exponentialRampToValueAtTime(30, t + 0.3);
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.35);
+    osc.stop(t + 0.28);
   }
 
   // BOSS 出場防空警報音
@@ -315,6 +299,7 @@ const bossBarContainer = document.getElementById('boss-bar-container');
 const bossBarFill = document.getElementById('boss-bar-fill');
 const bossHpText = document.getElementById('boss-hp-text');
 const bossWarningBanner = document.getElementById('boss-warning-banner');
+const kienzanBanner = document.getElementById('kienzan-banner');
 const enemyIndicatorsContainer = document.getElementById('enemy-indicators-container');
 
 const gameResultOverlay = document.getElementById('game-result-overlay');
@@ -333,6 +318,7 @@ let isGameOver = false;
 let chargeLevel = 0; // 0 ~ 1.0
 let isHandDetected = false;
 let palmScreenPos = { x: 0.5, y: 0.5, z: 0 };
+let prevPalmScreenPos = { x: 0.5, y: 0.5 };
 let lastPalmZ = 0;
 let facingMode = 'environment';
 let isFiring = false;
@@ -558,12 +544,244 @@ function getBezierPoint(p0, p1, p2, t) {
 }
 
 // ==========================================
-// 6. 敵人系統：小怪、小BOSS、大BOSS、光彈與彈反
+// 6. 敵人系統與「氣圓斬・一刀兩斷」切割系統
 // ==========================================
 const targets = [];
 const debrisList = [];
 const enemyProjectiles = [];
-const sparkParticles = [];
+const activeDiscs = [];      // 飛行中的氣圓斬光輪
+const slicedHalvesList = []; // 被切成兩半的敵機殘骸
+
+// 發射必殺技：氣圓斬 (Destructo Disc / Kienzan)
+function launchKienzanDisc(startPos, chopDir2D) {
+  sound.playKienzanLaunch();
+  if (navigator.vibrate) navigator.vibrate([60, 30, 120]);
+
+  // 顯示氣圓斬全螢幕熱血橫幅
+  if (kienzanBanner) {
+    kienzanBanner.classList.remove('hidden');
+    setTimeout(() => kienzanBanner.classList.add('hidden'), 850);
+  }
+
+  // 建立 3D 高速旋轉金色鋸齒光輪
+  const discGroup = new THREE.Group();
+  discGroup.position.copy(startPos);
+
+  // 核心發光圓盤
+  const innerGeo = new THREE.RingGeometry(0.05, 0.55, 32);
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending
+  });
+  const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+  innerMesh.rotation.x = Math.PI / 2;
+  discGroup.add(innerMesh);
+
+  // 外層黃金氣焰光環
+  const outerGeo = new THREE.RingGeometry(0.45, 0.88, 32);
+  const outerMat = new THREE.MeshBasicMaterial({
+    color: 0xffe600,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending
+  });
+  const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+  outerMesh.rotation.x = Math.PI / 2;
+  discGroup.add(outerMesh);
+
+  // 12 道高速旋轉鋸齒刀刃
+  const teethGroup = new THREE.Group();
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2;
+    const toothGeo = new THREE.ConeGeometry(0.12, 0.35, 3);
+    const toothMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa00,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending
+    });
+    const tooth = new THREE.Mesh(toothGeo, toothMat);
+    tooth.position.set(Math.cos(angle) * 0.88, 0, Math.sin(angle) * 0.88);
+    tooth.rotation.z = -Math.PI / 2;
+    tooth.rotation.y = -angle + Math.PI / 4;
+    teethGroup.add(tooth);
+  }
+  discGroup.add(teethGroup);
+
+  // 依照手掌劈砍的傾斜角度旋轉光輪平面，讓直劈就是直立光輪、橫砍就是水平光輪！
+  const chopAngle = Math.atan2(chopDir2D.y, chopDir2D.x);
+  // 計算切面法向量 (垂直於劈砍軌跡)
+  const sliceNormal = new THREE.Vector3(-Math.sin(chopAngle), -Math.cos(chopAngle), 0).normalize();
+  discGroup.rotation.z = chopAngle;
+
+  scene.add(discGroup);
+
+  // 自動鎖定準心最接近的目標或鎖定列表中的目標，保證砍得爽快又必中！
+  let targetEnemy = lockedTargets.length > 0
+    ? lockedTargets[0]
+    : findAimedTarget(startPos, smoothedAimDir, []);
+
+  // 如果準心旁沒直接壓到敵人，自動找視野中最近的敵人導引過去
+  if (!targetEnemy && targets.length > 0) {
+    let bestDist = Infinity;
+    targets.forEach(t => {
+      const d = t.position.distanceTo(startPos);
+      if (d < bestDist) {
+        bestDist = d;
+        targetEnemy = t;
+      }
+    });
+  }
+
+  lockedTargets = [];
+  lockReticlePool.forEach(r => r.visible = false);
+
+  const flyDir = targetEnemy
+    ? new THREE.Vector3().subVectors(targetEnemy.position, startPos).normalize()
+    : smoothedAimDir.clone().normalize();
+
+  activeDiscs.push({
+    mesh: discGroup,
+    teeth: teethGroup,
+    velocity: flyDir.multiplyScalar(11.5), // 超高速破空飛行
+    target: targetEnemy,
+    sliceNormal: sliceNormal,
+    hitSet: new Set(),
+    life: 2.2
+  });
+}
+
+// ⚔️ 將目標「一刀兩斷」切成左右/上下兩半並分離爆炸！
+function sliceTargetInHalf(targetGroup, sliceNormal, flyDir, damage = 10) {
+  targetGroup.userData.hp -= damage;
+
+  // 更新 BOSS 血條
+  if (targetGroup.userData.type === 'boss') {
+    const pct = Math.max(0, Math.round((targetGroup.userData.hp / targetGroup.userData.maxHp) * 100));
+    bossBarFill.style.width = `${pct}%`;
+    bossHpText.textContent = `${pct}%`;
+  }
+
+  sound.playKienzanSlice();
+  if (navigator.vibrate) navigator.vibrate([100, 40, 180]);
+
+  const pos = targetGroup.position.clone();
+  const radius = targetGroup.userData.radius || 0.45;
+  const isBoss = targetGroup.userData.type === 'boss';
+  const isElite = targetGroup.userData.type === 'elite';
+  const baseColor = isBoss ? 0x8800ff : (isElite ? 0xffaa00 : 0xff0055);
+
+  // 1. 產生一道貫穿敵機的熾熱黃金斬擊閃光線 (Slash Line)
+  const slashGeo = new THREE.PlaneGeometry(radius * 4.5, 0.14);
+  const slashMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 1.0,
+    blending: THREE.AdditiveBlending
+  });
+  const slashMesh = new THREE.Mesh(slashGeo, slashMat);
+  slashMesh.position.copy(pos);
+  slashMesh.lookAt(camera.position);
+  slashMesh.rotation.z = Math.atan2(sliceNormal.x, -sliceNormal.y);
+  scene.add(slashMesh);
+
+  // 2. 若為 BOSS 且尚未陣亡，也噴出大量被切開的護甲半塊與火花！
+  if (targetGroup.userData.hp > 0) {
+    targetGroup.position.addScaledVector(flyDir, 0.35);
+    createSlicedHalvesEffect(pos, radius * 0.75, baseColor, sliceNormal, slashMesh);
+    return;
+  }
+
+  // 3. 目標徹底被氣圓斬一刀兩斷！
+  score++;
+  scoreEl.textContent = score;
+
+  // 產生兩個完美的半球體，中間露出熾熱發光的熔岩切面，先緩慢錯開再轟然炸裂！
+  createSlicedHalvesEffect(pos, radius, baseColor, sliceNormal, slashMesh);
+
+  scene.remove(targetGroup);
+  const idx = targets.indexOf(targetGroup);
+  if (idx !== -1) targets.splice(idx, 1);
+
+  const lIdx = lockedTargets.indexOf(targetGroup);
+  if (lIdx !== -1) lockedTargets.splice(lIdx, 1);
+
+  checkStageCompletion();
+}
+
+function createSlicedHalvesEffect(pos, radius, colorHex, sliceNormal, slashMesh) {
+  // 建立上半/左半與下半/右半兩個半球體
+  for (let side of [-1, 1]) {
+    const halfGroup = new THREE.Group();
+    halfGroup.position.copy(pos);
+
+    // 半球體外殼
+    const hemiGeo = new THREE.SphereGeometry(radius, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    const hemiMat = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      roughness: 0.2,
+      metalness: 0.85,
+      emissive: colorHex,
+      emissiveIntensity: 0.5,
+      side: THREE.DoubleSide
+    });
+    const hemiMesh = new THREE.Mesh(hemiGeo, hemiMat);
+
+    // 熾熱發光切斷面 (Glowing Cut Cross-Section)
+    const cutGeo = new THREE.CircleGeometry(radius, 16);
+    const cutMat = new THREE.MeshBasicMaterial({
+      color: 0xffe600,
+      side: THREE.DoubleSide
+    });
+    const cutMesh = new THREE.Mesh(cutGeo, cutMat);
+    cutMesh.rotation.x = Math.PI / 2;
+
+    halfGroup.add(hemiMesh);
+    halfGroup.add(cutMesh);
+
+    // 將半球開口對準切面法向量
+    const upVec = new THREE.Vector3(0, 1, 0);
+    const targetNormal = sliceNormal.clone().multiplyScalar(side).normalize();
+    halfGroup.quaternion.setFromUnitVectors(upVec, targetNormal);
+
+    // 初始微微錯開
+    halfGroup.position.addScaledVector(targetNormal, 0.06);
+
+    scene.add(halfGroup);
+
+    // 兩半各自往切面兩側滑開並翻滾
+    const separateVel = targetNormal.clone().multiplyScalar(1.6 + Math.random() * 0.6);
+    // 加上一點錯位滑動感 (沿著切線方向前後錯開)
+    const tangent = new THREE.Vector3(-sliceNormal.y, sliceNormal.x, 0).multiplyScalar(side * 0.8);
+    separateVel.add(tangent);
+
+    slicedHalvesList.push({
+      mesh: halfGroup,
+      velocity: separateVel,
+      rotVel: new THREE.Vector3(
+        (Math.random() - 0.5) * 3,
+        (Math.random() - 0.5) * 3,
+        side * 2.5
+      ),
+      life: 1.15
+    });
+  }
+
+  // 斬擊閃光線自動消散加入動畫列表
+  slicedHalvesList.push({
+    mesh: slashMesh,
+    velocity: new THREE.Vector3(0, 0, 0),
+    rotVel: new THREE.Vector3(0, 0, 0),
+    isSlashFlash: true,
+    life: 0.35
+  });
+}
 
 // 生成各種類型的敵人
 function spawnEnemy(type = 'drone', customPos = null) {
@@ -1128,6 +1346,12 @@ function onHandResults(results) {
       const rawY = (wrist.y + indexMcp.y + pinkyMcp.y) / 3;
       const rawZ = (wrist.z + indexMcp.z + pinkyMcp.z) / 3;
 
+      const deltaX = rawX - prevPalmScreenPos.x;
+      const deltaY = rawY - prevPalmScreenPos.y;
+      const chopSpeed2D = Math.hypot(deltaX, deltaY);
+      prevPalmScreenPos.x = rawX;
+      prevPalmScreenPos.y = rawY;
+
       palmScreenPos.x = rawX;
       palmScreenPos.y = rawY;
 
@@ -1144,15 +1368,30 @@ function onHandResults(results) {
 
       // 3. 狀態機處理
       if (!isFiring && !isGameOver) {
+        // 💿 必殺技優先判定：【氣圓斬 (Kienzan)】
+        // 當能量集滿 (>= 80%) 且張開手掌做出快速揮砍/劈下動作 (chopSpeed2D > 0.085)
+        if (!isFist && chargeLevel >= 0.80 && chopSpeed2D > 0.085) {
+          sound.stopChargeHum();
+          chargeLevel = 0;
+          updateChargeUI();
+          launchKienzanDisc(pPos, { x: deltaX, y: deltaY });
+          statusEl.textContent = "💿 必殺・氣圓斬！！一刀兩斷！";
+          guideIconEl.textContent = "💿";
+          guideTextEl.textContent = "高速旋轉氣圓斬破空而出！將敵人徹底切成兩半！";
+        }
         // 狀態 A：掌心向上聚氣
-        if (isPalmUp) {
-          chargeLevel = Math.min(1.0, chargeLevel + 0.022);
+        else if (isPalmUp) {
+          chargeLevel = Math.min(1.0, chargeLevel + 0.025);
           updateChargeUI();
           sound.startChargeHum(chargeLevel);
 
-          statusEl.textContent = `⚡ 掌心向上聚氣中 (${Math.round(chargeLevel * 100)}%)`;
-          guideIconEl.textContent = "🤲";
-          guideTextEl.textContent = chargeLevel > 0.8 ? "能量充足！手移到敵人上握拳即可鎖定！" : "維持掌心向上托天蓄力...";
+          statusEl.textContent = chargeLevel >= 0.80
+            ? `💿 氣圓斬就緒 (${Math.round(chargeLevel * 100)}%)！手刀揮砍即可斬斷目標！`
+            : `⚡ 掌心向上聚氣中 (${Math.round(chargeLevel * 100)}%)`;
+          guideIconEl.textContent = chargeLevel >= 0.80 ? "💿" : "🤲";
+          guideTextEl.textContent = chargeLevel >= 0.80
+            ? "能量已滿！直接【手掌揮砍劈下】發射氣圓斬，或握拳鎖定！"
+            : "維持掌心向上托天蓄力 (集滿 80% 解鎖必殺氣圓斬)...";
         } else {
           sound.stopChargeHum();
         }
@@ -1185,9 +1424,15 @@ function onHandResults(results) {
         } else if (!isFist && !isPalmUp && deltaZ > 0.038 && (lockedTargets.length > 0 || chargeLevel >= 0.35)) {
           fireKiBlast();
         } else if (!isFist && !isPalmUp && lockedTargets.length === 0) {
-          statusEl.textContent = "🎯 掌心游標瞄準中";
-          guideIconEl.textContent = "🖐️";
-          guideTextEl.textContent = "把掌心移到敵人身上，握拳鎖定、張開手掌齊射！";
+          if (chargeLevel >= 0.80) {
+            statusEl.textContent = "💿 氣圓斬蓄勢待發！請揮掌劈砍！";
+            guideIconEl.textContent = "🔪";
+            guideTextEl.textContent = "手掌快速向下或橫向揮砍，立刻發射氣圓斬把敵人切兩半！";
+          } else {
+            statusEl.textContent = "🎯 掌心游標瞄準中";
+            guideIconEl.textContent = "🖐️";
+            guideTextEl.textContent = "把掌心移到敵人身上，握拳鎖定、張開手掌齊射！";
+          }
         }
       }
 
@@ -1247,8 +1492,17 @@ function animate() {
     const scale = 0.5 + chargeLevel * 1.5;
     kiGroup.scale.set(scale, scale, scale);
 
-    ringMesh1.rotation.x += delta * 4;
-    ringMesh1.rotation.y += delta * 3;
+    // 集滿 80% 以上時，掌心聚氣球變成黃金氣圓斬高速旋刃狀態！
+    if (chargeLevel >= 0.80) {
+      orbMesh.material.color.setHex(0xffe600);
+      ringMesh1.scale.set(1.6, 1.6, 1.6);
+      ringMesh1.rotation.z += delta * 22;
+    } else {
+      orbMesh.material.color.setHex(0x00ffff);
+      ringMesh1.scale.set(1.0, 1.0, 1.0);
+      ringMesh1.rotation.x += delta * 4;
+      ringMesh1.rotation.y += delta * 3;
+    }
     ringMesh2.rotation.y -= delta * 5;
     ringMesh2.rotation.z += delta * 4;
     kiParticles.rotation.y += delta * 2;
@@ -1338,6 +1592,65 @@ function animate() {
       m.trail.geometry.dispose();
       m.trail.material.dispose();
       activeMissiles.splice(i, 1);
+    }
+  }
+
+  // 💿 氣圓斬光輪高速飛行與「一刀兩斷」切割判定
+  for (let dIdx = activeDiscs.length - 1; dIdx >= 0; dIdx--) {
+    const disc = activeDiscs[dIdx];
+    disc.life -= delta;
+
+    // 若有鎖定目標且目標仍在場上，微幅自動追蹤確保必中！
+    if (disc.target && targets.includes(disc.target) && !disc.hitSet.has(disc.target)) {
+      const desiredDir = new THREE.Vector3().subVectors(disc.target.position, disc.mesh.position).normalize();
+      disc.velocity.lerp(desiredDir.multiplyScalar(11.5), 0.25);
+    }
+
+    disc.mesh.position.addScaledVector(disc.velocity, delta);
+    // 鋸齒光輪超高速自轉
+    disc.teeth.rotation.y += delta * 35;
+
+    // 檢測光輪是否切過任何敵機（具穿透屬性，可一刀連切多隻！）
+    for (let tIdx = targets.length - 1; tIdx >= 0; tIdx--) {
+      const tgt = targets[tIdx];
+      if (disc.hitSet.has(tgt)) continue;
+      const dist = disc.mesh.position.distanceTo(tgt.position);
+      if (dist < tgt.userData.radius + 0.95) {
+        disc.hitSet.add(tgt);
+        sliceTargetInHalf(tgt, disc.sliceNormal, disc.velocity.clone().normalize(), 10);
+      }
+    }
+
+    if (disc.life <= 0) {
+      scene.remove(disc.mesh);
+      activeDiscs.splice(dIdx, 1);
+    }
+  }
+
+  // ⚔️ 被切成兩半的敵機錯位分離與爆炸動畫更新
+  for (let hIdx = slicedHalvesList.length - 1; hIdx >= 0; hIdx--) {
+    const item = slicedHalvesList[hIdx];
+    item.life -= delta;
+
+    if (item.isSlashFlash) {
+      item.mesh.scale.x += delta * 8;
+      item.mesh.scale.y = Math.max(0.01, item.life * 2.5);
+      item.mesh.material.opacity = Math.max(0, item.life * 2.8);
+    } else {
+      // 兩半緩緩向兩側滑開，接著受微重力下落並縮小消散
+      item.velocity.y -= 3.2 * delta;
+      item.mesh.position.addScaledVector(item.velocity, delta);
+      item.mesh.rotation.x += item.rotVel.x * delta;
+      item.mesh.rotation.y += item.rotVel.y * delta;
+      item.mesh.rotation.z += item.rotVel.z * delta;
+
+      const s = Math.min(1.0, Math.max(0.01, item.life * 1.1));
+      item.mesh.scale.set(s, s, s);
+    }
+
+    if (item.life <= 0) {
+      scene.remove(item.mesh);
+      slicedHalvesList.splice(hIdx, 1);
     }
   }
 

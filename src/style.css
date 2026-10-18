@@ -562,31 +562,33 @@ html, body {
   to { transform: scale(1.02); opacity: 1; }
 }
 
-/* 食指彈反成功橫幅 (居合彈反) */
-#parry-banner {
+/* 氣圓斬發動浮動橫幅 */
+#kienzan-banner {
   position: absolute;
-  top: 40%;
+  top: 38%;
   left: 50%;
   transform: translate(-50%, -50%) scale(1.1);
-  background: linear-gradient(135deg, rgba(0, 247, 255, 0.95), rgba(255, 230, 0, 0.95));
-  color: #000;
+  background: linear-gradient(135deg, rgba(255, 230, 0, 0.96), rgba(255, 120, 0, 0.96));
+  color: #1a0800;
   font-weight: 900;
-  font-size: 19px;
-  padding: 10px 24px;
+  font-size: 20px;
+  padding: 10px 26px;
   border-radius: 30px;
-  box-shadow: 0 0 35px #00f7ff, 0 0 50px #ffe600;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 35px #ffe600, 0 0 60px #ff8800;
   z-index: 70;
   pointer-events: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: parry-pop 0.65s ease-out forwards;
+  white-space: nowrap;
+  animation: kienzan-pop 0.85s ease-out forwards;
 }
 
-@keyframes parry-pop {
+@keyframes kienzan-pop {
   0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
-  25% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  80% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  20% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  75% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
   100% { transform: translate(-50%, -70%) scale(0.9); opacity: 0; }
 }
 
