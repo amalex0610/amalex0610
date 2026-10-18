@@ -697,10 +697,30 @@ html, body {
   background: rgba(30, 10, 45, 0.9);
 }
 
+.offscreen-indicator.indicator-miniboss {
+  border-color: #ee0077;
+  color: #ff66cc;
+  box-shadow: 0 0 16px rgba(238, 0, 119, 0.8);
+  font-size: 13px;
+  background: rgba(35, 10, 25, 0.9);
+}
+
 .offscreen-indicator.indicator-elite {
   border-color: #ffaa00;
   color: #ffcc00;
   box-shadow: 0 0 16px rgba(255, 170, 0, 0.7);
+}
+
+.offscreen-indicator.indicator-armored {
+  border-color: #ff5500;
+  color: #ff8833;
+  box-shadow: 0 0 16px rgba(255, 85, 0, 0.7);
+}
+
+.offscreen-indicator.indicator-speedy {
+  border-color: #00f7ff;
+  color: #00f7ff;
+  box-shadow: 0 0 14px rgba(0, 247, 255, 0.7);
 }
 
 .indicator-arrow {
@@ -719,3 +739,197 @@ html, body {
     opacity: 0.75;
   }
 }
+
+/* 頂部快捷切換列 (提示、音樂、教學) */
+.hud-quick-toggles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.icon-toggle-btn {
+  background: rgba(10, 20, 35, 0.85);
+  border: 1px solid rgba(0, 247, 255, 0.4);
+  color: #ccc;
+  padding: 5px 9px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+.icon-toggle-btn:active {
+  transform: scale(0.92);
+}
+
+.icon-toggle-btn.active {
+  background: rgba(0, 247, 255, 0.15);
+  border-color: #00f7ff;
+  color: #00f7ff;
+  box-shadow: 0 0 10px rgba(0, 247, 255, 0.4);
+}
+
+.icon-toggle-btn.muted {
+  background: rgba(40, 20, 20, 0.7);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff8888;
+}
+
+/* 教學引導提示框收合/隱藏狀態 */
+.guide-box.user-hidden {
+  opacity: 0 !important;
+  transform: translateY(-15px) scale(0.9) !important;
+  pointer-events: none !important;
+  display: none !important;
+}
+
+/* 開始選單按鈕群 */
+.menu-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.tutorial-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  border: 1.5px solid rgba(0, 247, 255, 0.6);
+  border-radius: 14px;
+  background: rgba(0, 247, 255, 0.08);
+  color: #00f7ff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.tutorial-btn:active {
+  transform: scale(0.96);
+  background: rgba(0, 247, 255, 0.2);
+}
+
+/* 📖 完整新手教學彈窗 */
+#tutorial-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(4, 8, 18, 0.94);
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.tutorial-card {
+  background: rgba(16, 26, 45, 0.95);
+  border: 2px solid #00f7ff;
+  border-radius: 20px;
+  padding: 22px 18px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(0, 247, 255, 0.35);
+}
+
+.tutorial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 247, 255, 0.3);
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.tutorial-header h2 {
+  font-size: 17px;
+  color: #00f7ff;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.close-x-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.close-x-btn:hover {
+  color: #fff;
+}
+
+.tutorial-scroll-content {
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.t-section {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.t-section h3 {
+  font-size: 15px;
+  margin: 6px 0 4px 0;
+  color: #fff;
+}
+
+.t-section p {
+  font-size: 13px;
+  color: #bbb;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.t-section p b {
+  color: #ffe600;
+}
+
+.t-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(0, 247, 255, 0.2);
+  color: #00f7ff;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+.gold-badge {
+  background: rgba(255, 215, 0, 0.25);
+  color: #ffd700;
+}
+
+.highlight-t-section {
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.06);
+}
+

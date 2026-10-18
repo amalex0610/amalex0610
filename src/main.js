@@ -273,6 +273,157 @@ class SoundSynthesizer {
       osc.stop(t + idx * 0.25 + 0.5);
     });
   }
+
+  // ==========================================
+  // 🎵 賽博龐克 Procedural BGM 合成音軌 (Web Audio API)
+  // ==========================================
+  initBGM() {
+    if (!this.ctx) return;
+    if (this.bgmGain) return;
+    this.bgmGain = this.ctx.createGain();
+    this.bgmGain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+    this.bgmGain.connect(this.ctx.destination);
+    this.bgmMuted = false;
+    this.bgmStep = 0;
+    this.bgmInterval = null;
+  }
+
+  startBGM() {
+    this.init();
+    this.initBGM();
+    if (this.bgmInterval) return;
+
+    // 16 步合成器節奏 (Tempo: ~125 BPM, 每 16 分音符約 120ms)
+    // 激昂的賽博龐克戰鬥重低音音階 (D 小調)
+    const bassFreqs = [
+      73.42, 73.42, 146.83, 73.42,   // D2, D2, D3, D2
+      87.31, 73.42, 98.00, 110.00,   // F2, D2, G2, A2
+      73.42, 73.42, 146.83, 73.42,   // D2, D2, D3, D2
+      130.81, 116.54, 110.00, 98.00  // C3, Bb2, A2, G2
+    ];
+
+    const leadFreqs = [
+      293.66, 0, 349.23, 0,
+      440.00, 0, 392.00, 0,
+      523.25, 0, 440.00, 392.00,
+      349.23, 0, 293.66, 0
+    ];
+
+    const stepDuration = 0.12;
+
+    const playStep = () => {
+      if (!this.ctx || this.bgmMuted) {
+        this.bgmStep = (this.bgmStep + 1) % 16;
+        return;
+      }
+      const t = this.ctx.currentTime;
+      const step = this.bgmStep;
+
+      // 1. Kick Drum (四拍動態大鼓: 步數 0, 4, 8, 12)
+      if (step % 4 === 0) {
+        const kickOsc = this.ctx.createOscillator();
+        const kickGain = this.ctx.createGain();
+        kickOsc.type = 'sine';
+        kickOsc.frequency.setValueAtTime(140, t);
+        kickOsc.frequency.exponentialRampToValueAtTime(36, t + 0.08);
+        kickGain.gain.setValueAtTime(0.45, t);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        kickOsc.connect(kickGain);
+        kickGain.connect(this.bgmGain);
+        kickOsc.start(t);
+        kickOsc.stop(t + 0.09);
+      }
+
+      // 2. Snare / Clap (軍鼓小鼓: 步數 4, 12)
+      if (step === 4 || step === 12) {
+        const snareOsc = this.ctx.createOscillator();
+        const snareGain = this.ctx.createGain();
+        snareOsc.type = 'triangle';
+        snareOsc.frequency.setValueAtTime(230, t);
+        snareOsc.frequency.exponentialRampToValueAtTime(80, t + 0.07);
+        snareGain.gain.setValueAtTime(0.28, t);
+        snareGain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        snareOsc.connect(snareGain);
+        snareGain.connect(this.bgmGain);
+        snareOsc.start(t);
+        snareOsc.stop(t + 0.08);
+      }
+
+      // 3. Hi-hat (碎拍金屬擦片: 奇數步)
+      if (step % 2 === 1) {
+        const hatOsc = this.ctx.createOscillator();
+        const hatGain = this.ctx.createGain();
+        hatOsc.type = 'sawtooth';
+        hatOsc.frequency.setValueAtTime(7500 + (step % 4) * 600, t);
+        hatGain.gain.setValueAtTime(0.05, t);
+        hatGain.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
+        hatOsc.connect(hatGain);
+        hatGain.connect(this.bgmGain);
+        hatOsc.start(t);
+        hatOsc.stop(t + 0.035);
+      }
+
+      // 4. Cyber Synthwave Bassline (穿透鋸齒重低音)
+      const bassFreq = bassFreqs[step];
+      if (bassFreq > 0) {
+        const bassOsc = this.ctx.createOscillator();
+        const bassGain = this.ctx.createGain();
+        const bassFilter = this.ctx.createBiquadFilter();
+
+        bassOsc.type = 'sawtooth';
+        bassOsc.frequency.setValueAtTime(bassFreq, t);
+
+        bassFilter.type = 'lowpass';
+        bassFilter.frequency.setValueAtTime(450, t);
+        bassFilter.frequency.exponentialRampToValueAtTime(1400, t + 0.02);
+        bassFilter.frequency.exponentialRampToValueAtTime(350, t + stepDuration * 0.9);
+
+        bassGain.gain.setValueAtTime(0.22, t);
+        bassGain.gain.exponentialRampToValueAtTime(0.005, t + stepDuration * 0.88);
+
+        bassOsc.connect(bassFilter);
+        bassFilter.connect(bassGain);
+        bassGain.connect(this.bgmGain);
+
+        bassOsc.start(t);
+        bassOsc.stop(t + stepDuration * 0.88);
+      }
+
+      // 5. Ambient Lead Arpeggio (太空未來感電子主音)
+      const leadFreq = leadFreqs[step];
+      if (leadFreq > 0) {
+        const leadOsc = this.ctx.createOscillator();
+        const leadGain = this.ctx.createGain();
+        leadOsc.type = 'sine';
+        leadOsc.frequency.setValueAtTime(leadFreq, t);
+        leadGain.gain.setValueAtTime(0.1, t);
+        leadGain.gain.exponentialRampToValueAtTime(0.001, t + stepDuration * 0.78);
+        leadOsc.connect(leadGain);
+        leadGain.connect(this.bgmGain);
+        leadOsc.start(t);
+        leadOsc.stop(t + stepDuration * 0.78);
+      }
+
+      this.bgmStep = (this.bgmStep + 1) % 16;
+    };
+
+    this.bgmInterval = setInterval(playStep, stepDuration * 1000);
+  }
+
+  stopBGM() {
+    if (this.bgmInterval) {
+      clearInterval(this.bgmInterval);
+      this.bgmInterval = null;
+    }
+  }
+
+  toggleBGM() {
+    this.bgmMuted = !this.bgmMuted;
+    if (this.bgmGain && this.ctx) {
+      this.bgmGain.gain.setTargetAtTime(this.bgmMuted ? 0 : 0.18, this.ctx.currentTime, 0.05);
+    }
+    return !this.bgmMuted;
+  }
 }
 
 const sound = new SoundSynthesizer();
@@ -298,9 +449,20 @@ const stageBadge = document.getElementById('stage-badge');
 const bossBarContainer = document.getElementById('boss-bar-container');
 const bossBarFill = document.getElementById('boss-bar-fill');
 const bossHpText = document.getElementById('boss-hp-text');
+const bossNameEl = document.getElementById('boss-name');
 const bossWarningBanner = document.getElementById('boss-warning-banner');
 const kienzanBanner = document.getElementById('kienzan-banner');
 const enemyIndicatorsContainer = document.getElementById('enemy-indicators-container');
+
+// 頂部快捷功能與教學彈窗 UI
+const guideBox = document.getElementById('gesture-guide');
+const btnToggleGuide = document.getElementById('btn-toggle-guide');
+const btnToggleBgm = document.getElementById('btn-toggle-bgm');
+const btnOpenTutorial = document.getElementById('btn-open-tutorial');
+const btnStartMenuTutorial = document.getElementById('btn-start-menu-tutorial');
+const btnCloseTutorial = document.getElementById('btn-close-tutorial');
+const btnTutorialGotIt = document.getElementById('btn-tutorial-got-it');
+const tutorialModal = document.getElementById('tutorial-modal');
 
 const gameResultOverlay = document.getElementById('game-result-overlay');
 const resultTitle = document.getElementById('result-title');
@@ -661,10 +823,8 @@ function sliceTargetInHalf(targetGroup, sliceNormal, flyDir, damage = 10) {
   targetGroup.userData.hp -= damage;
 
   // 更新 BOSS 血條
-  if (targetGroup.userData.type === 'boss') {
-    const pct = Math.max(0, Math.round((targetGroup.userData.hp / targetGroup.userData.maxHp) * 100));
-    bossBarFill.style.width = `${pct}%`;
-    bossHpText.textContent = `${pct}%`;
+  if (targetGroup.userData.type === 'boss' || targetGroup.userData.type === 'miniboss') {
+    updateBossHealthBar();
   }
 
   sound.playKienzanSlice();
@@ -672,9 +832,13 @@ function sliceTargetInHalf(targetGroup, sliceNormal, flyDir, damage = 10) {
 
   const pos = targetGroup.position.clone();
   const radius = targetGroup.userData.radius || 0.45;
-  const isBoss = targetGroup.userData.type === 'boss';
-  const isElite = targetGroup.userData.type === 'elite';
-  const baseColor = isBoss ? 0x8800ff : (isElite ? 0xffaa00 : 0xff0055);
+  const type = targetGroup.userData.type;
+  let baseColor = 0xff0055;
+  if (type === 'boss') baseColor = 0x8800ff;
+  else if (type === 'miniboss') baseColor = 0xee0077;
+  else if (type === 'armored') baseColor = 0xff4400;
+  else if (type === 'elite') baseColor = 0xffaa00;
+  else if (type === 'speedy') baseColor = 0x00f7ff;
 
   // 1. 產生一道貫穿敵機的熾熱黃金斬擊閃光線 (Slash Line)
   const slashGeo = new THREE.PlaneGeometry(radius * 4.5, 0.14);
@@ -691,7 +855,7 @@ function sliceTargetInHalf(targetGroup, sliceNormal, flyDir, damage = 10) {
   slashMesh.rotation.z = Math.atan2(sliceNormal.x, -sliceNormal.y);
   scene.add(slashMesh);
 
-  // 2. 若為 BOSS 且尚未陣亡，也噴出大量被切開的護甲半塊與火花！
+  // 2. 若為 BOSS/母艦且尚未陣亡，也噴出大量被切開的護甲半塊與火花！
   if (targetGroup.userData.hp > 0) {
     targetGroup.position.addScaledVector(flyDir, 0.35);
     createSlicedHalvesEffect(pos, radius * 0.75, baseColor, sliceNormal, slashMesh);
@@ -784,13 +948,15 @@ function createSlicedHalvesEffect(pos, radius, colorHex, sliceNormal, slashMesh)
 }
 
 // 生成各種類型的敵人
-function spawnEnemy(type = 'drone', customPos = null) {
+function spawnEnemy(type = 'drone', customPos = null, customHp = null) {
   const enemyGroup = new THREE.Group();
   let maxHp = 1;
   let radius = 0.45;
+  let rotSpeedX = (Math.random() - 0.5) * 1.5;
+  let rotSpeedY = (Math.random() - 0.5) * 2.0;
 
   if (type === 'drone') {
-    // 【小怪】：機動浮游晶石
+    // 【基本小怪】：機動浮游晶石
     maxHp = 1;
     radius = 0.4;
     const geo = new THREE.OctahedronGeometry(0.35, 0);
@@ -807,8 +973,51 @@ function spawnEnemy(type = 'drone', customPos = null) {
     const shieldGeo = new THREE.TorusGeometry(0.48, 0.015, 8, 24);
     const shieldMat = new THREE.MeshBasicMaterial({ color: 0x00f7ff, transparent: true, opacity: 0.7 });
     enemyGroup.add(new THREE.Mesh(shieldGeo, shieldMat));
+  } else if (type === 'speedy') {
+    // 【疾速僚機】：青色高速浮游菱晶 (機動性高、自轉極快)
+    maxHp = 2;
+    radius = 0.35;
+    rotSpeedX = (Math.random() - 0.5) * 3.5;
+    rotSpeedY = (Math.random() - 0.5) * 4.2;
+    const geo = new THREE.ConeGeometry(0.3, 0.6, 5);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x00f7ff,
+      roughness: 0.1,
+      metalness: 0.9,
+      emissive: 0x007788,
+      emissiveIntensity: 0.8
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = Math.PI / 2;
+    enemyGroup.add(mesh);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.42, 0.015, 8, 24),
+      new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.85 })
+    );
+    enemyGroup.add(ring);
+  } else if (type === 'armored') {
+    // 【重裝護甲機】：赤橙色多面重型無人機 (HP 高、護甲厚)
+    maxHp = 8;
+    radius = 0.55;
+    const geo = new THREE.DodecahedronGeometry(0.5, 0);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xff4400,
+      roughness: 0.3,
+      metalness: 0.9,
+      emissive: 0x772200,
+      emissiveIntensity: 0.7
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    enemyGroup.add(mesh);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.72, 0.03, 12, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 })
+    );
+    enemyGroup.add(ring);
   } else if (type === 'elite') {
-    // 【小 BOSS】：雙重旋轉光環精英機
+    // 【精英機】：雙重旋轉光環精英戰機
     maxHp = 6;
     radius = 0.65;
     const geo = new THREE.IcosahedronGeometry(0.55, 0);
@@ -832,40 +1041,68 @@ function spawnEnemy(type = 'drone', customPos = null) {
     );
     enemyGroup.add(ring1);
     enemyGroup.add(ring2);
+  } else if (type === 'miniboss') {
+    // 【中階母艦】：深紅巨艦 + 3 顆環繞浮游護盾衛星
+    maxHp = 18;
+    radius = 0.9;
+    const geo = new THREE.IcosahedronGeometry(0.8, 0);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xee0077,
+      roughness: 0.15,
+      metalness: 0.92,
+      emissive: 0x880044,
+      emissiveIntensity: 0.85
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    enemyGroup.add(mesh);
+
+    const satGroup = new THREE.Group();
+    for (let s = 0; s < 3; s++) {
+      const satGeo = new THREE.OctahedronGeometry(0.18, 0);
+      const satMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+      const sat = new THREE.Mesh(satGeo, satMat);
+      sat.position.set(Math.cos(s * Math.PI * 2 / 3) * 1.35, Math.sin(s * Math.PI * 2 / 3) * 1.35, 0);
+      satGroup.add(sat);
+    }
+    enemyGroup.add(satGroup);
+    enemyGroup.userData.satGroup = satGroup;
   } else if (type === 'boss') {
-    // 【大 BOSS】：巨型 OMEGA 毀滅星核
-    maxHp = 30;
-    radius = 1.1;
-    const geo = new THREE.DodecahedronGeometry(0.9, 0);
+    // 【大 BOSS】：巨型 OMEGA 毀滅星核 + 6 顆護盾衛星
+    maxHp = 55;
+    radius = 1.2;
+    const geo = new THREE.DodecahedronGeometry(1.0, 0);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x8800ff,
       roughness: 0.15,
       metalness: 0.95,
       emissive: 0x440088,
-      emissiveIntensity: 0.9
+      emissiveIntensity: 0.95
     });
     const mesh = new THREE.Mesh(geo, mat);
     enemyGroup.add(mesh);
 
-    // 4 顆環繞浮游護盾衛星
     const satGroup = new THREE.Group();
-    for (let s = 0; s < 4; s++) {
-      const satGeo = new THREE.OctahedronGeometry(0.2, 0);
+    for (let s = 0; s < 6; s++) {
+      const satGeo = new THREE.OctahedronGeometry(0.22, 0);
       const satMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
       const sat = new THREE.Mesh(satGeo, satMat);
-      sat.position.set(Math.cos(s * Math.PI / 2) * 1.5, Math.sin(s * Math.PI / 2) * 1.5, 0);
+      sat.position.set(Math.cos(s * Math.PI / 3) * 1.7, Math.sin(s * Math.PI / 3) * 1.7, 0);
       satGroup.add(sat);
     }
     enemyGroup.add(satGroup);
     enemyGroup.userData.satGroup = satGroup;
   }
 
+  if (customHp) maxHp = customHp;
+
   // 位置配置：緊縮在鏡頭正前方 ±30° (0.52 rad) 舒適視野內，避免刷在死角或轉身看不到的地方
   if (customPos) {
     enemyGroup.position.copy(customPos);
   } else {
     if (type === 'boss') {
-      enemyGroup.position.set(0, 0.15, -4.2); // BOSS 居中霸氣降臨
+      enemyGroup.position.set(0, 0.2, -4.3); // BOSS 居中霸氣降臨
+    } else if (type === 'miniboss') {
+      enemyGroup.position.set(0, 0.25, -4.0); // 中階巨獸正前方登場
     } else {
       // 水平夾角收斂在 ±28 度以內，高度收斂在 -0.4 ~ +0.5m，距離 3.2m ~ 4.5m，保證一抬手機就在正前方！
       const angle = (Math.random() - 0.5) * 0.95; 
@@ -880,8 +1117,8 @@ function spawnEnemy(type = 'drone', customPos = null) {
     hp: maxHp,
     maxHp: maxHp,
     radius: radius,
-    rotSpeedX: (Math.random() - 0.5) * 1.5,
-    rotSpeedY: (Math.random() - 0.5) * 2.0,
+    rotSpeedX: rotSpeedX,
+    rotSpeedY: rotSpeedY,
     baseY: enemyGroup.position.y,
     floatOffset: Math.random() * Math.PI * 2
   });
@@ -889,6 +1126,22 @@ function spawnEnemy(type = 'drone', customPos = null) {
   scene.add(enemyGroup);
   targets.push(enemyGroup);
   return enemyGroup;
+}
+
+// 更新 BOSS 血條（支援單體 BOSS 與雙子戰艦聯合血量）
+function updateBossHealthBar() {
+  const bossTargets = targets.filter(t => t.userData.type === 'boss' || t.userData.type === 'miniboss');
+  if (bossTargets.length > 0) {
+    let currentHpSum = 0;
+    let maxHpSum = 0;
+    bossTargets.forEach(b => {
+      currentHpSum += Math.max(0, b.userData.hp);
+      maxHpSum += b.userData.maxHp;
+    });
+    const pct = maxHpSum > 0 ? Math.max(0, Math.round((currentHpSum / maxHpSum) * 100)) : 0;
+    bossBarFill.style.width = `${pct}%`;
+    bossHpText.textContent = `${pct}%`;
+  }
 }
 
 // ==========================================
@@ -959,7 +1212,12 @@ function updateOffscreenIndicators() {
 
     const type = target.userData.type;
     el.className = `offscreen-indicator indicator-${type}`;
-    const label = type === 'boss' ? '⚠️ BOSS' : (type === 'elite' ? '⚡ ELITE' : '🎯 敵機');
+    let label = '🎯 敵機';
+    if (type === 'boss') label = '⚠️ BOSS';
+    else if (type === 'miniboss') label = '☠️ 戰艦';
+    else if (type === 'elite') label = '⚡ 精英';
+    else if (type === 'armored') label = '🛡️ 重裝';
+    else if (type === 'speedy') label = '⚡ 疾速';
     
     el.innerHTML = `<span class="indicator-arrow" style="transform: rotate(${deg}deg)">➔</span><span>${label}</span>`;
     el.style.left = `${posX}px`;
@@ -979,11 +1237,9 @@ function updateOffscreenIndicators() {
 function destroyTarget(targetGroup, hitPoint, blastDir, damage = 1) {
   targetGroup.userData.hp -= damage;
 
-  // 更新 BOSS 血條 (若受傷者為 BOSS)
-  if (targetGroup.userData.type === 'boss') {
-    const pct = Math.max(0, Math.round((targetGroup.userData.hp / targetGroup.userData.maxHp) * 100));
-    bossBarFill.style.width = `${pct}%`;
-    bossHpText.textContent = `${pct}%`;
+  // 更新 BOSS 血條 (若受傷者為 BOSS 或巡航巨艦)
+  if (targetGroup.userData.type === 'boss' || targetGroup.userData.type === 'miniboss') {
+    updateBossHealthBar();
   }
 
   // 尚未死亡：受傷閃爍
@@ -1001,13 +1257,17 @@ function destroyTarget(targetGroup, hitPoint, blastDir, damage = 1) {
 
   if (navigator.vibrate) navigator.vibrate([80, 40, 150]);
 
-  // 產生 30 塊碎片
-  const shardCount = targetGroup.userData.type === 'boss' ? 55 : 30;
+  // 產生 30~55 塊碎片
+  const isBossType = targetGroup.userData.type === 'boss';
+  const isMiniboss = targetGroup.userData.type === 'miniboss';
+  const shardCount = isBossType ? 55 : (isMiniboss ? 40 : 28);
+  const shardColor = isBossType ? 0xaa00ff : (isMiniboss ? 0xee0077 : (targetGroup.userData.type === 'armored' ? 0xff5500 : 0xff2200));
+
   for (let i = 0; i < shardCount; i++) {
     const shardGeo = new THREE.TetrahedronGeometry(0.06 + Math.random() * 0.1);
     const shardMat = new THREE.MeshStandardMaterial({
-      color: targetGroup.userData.type === 'boss' ? 0xaa00ff : 0xff4400,
-      emissive: 0xff2200,
+      color: shardColor,
+      emissive: shardColor,
       emissiveIntensity: 0.8
     });
     const shard = new THREE.Mesh(shardGeo, shardMat);
@@ -1041,7 +1301,7 @@ function destroyTarget(targetGroup, hitPoint, blastDir, damage = 1) {
 }
 
 // ==========================================
-// 7. 關卡進程管理 (Stage Progression)
+// 7. 關卡進程管理 (Stage Progression: 10 關史詩戰役)
 // ==========================================
 function startStage(stageNum) {
   currentStage = stageNum;
@@ -1054,34 +1314,95 @@ function startStage(stageNum) {
   lockReticlePool.forEach(r => r.visible = false);
 
   if (stageNum === 1) {
-    stageBadge.textContent = "STAGE 1 · 偵察小隊";
+    stageBadge.textContent = "STAGE 1 · 初試啼聲";
     bossBarContainer.classList.add('boss-bar-hidden');
-    // 生成 4 隻偵察小怪
     for (let i = 0; i < 4; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第一關！瞄準並消滅所有浮游偵察機！";
+    guideTextEl.textContent = "第一關！掌心對準瞄準，向前推掌發射氣功！";
   } else if (stageNum === 2) {
-    stageBadge.textContent = "STAGE 2 · 精英突襲";
+    stageBadge.textContent = "STAGE 2 · 蜂群突圍";
     bossBarContainer.classList.add('boss-bar-hidden');
-    // 生成 3 隻小怪 + 1 隻精英小 BOSS
+    for (let i = 0; i < 5; i++) spawnEnemy('drone');
+    spawnEnemy('speedy');
+    guideTextEl.textContent = "第二關！敵機增加，握緊拳頭多重鎖定後全彈齊射！";
+  } else if (stageNum === 3) {
+    stageBadge.textContent = "STAGE 3 · 精英前鋒";
+    bossBarContainer.classList.add('boss-bar-hidden');
     spawnEnemy('elite');
     for (let i = 0; i < 3; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "第二關！精英機登場！血量更厚，需多次命中！";
-  } else if (stageNum === 3) {
-    stageBadge.textContent = "STAGE 3 · BOSS 終局";
-    // 觸發全螢幕 BOSS 警報
+    guideTextEl.textContent = "第三關！黃金精英機登場！血量厚實，需多次連續命中！";
+  } else if (stageNum === 4) {
+    stageBadge.textContent = "STAGE 4 · 疾速攔截";
+    bossBarContainer.classList.add('boss-bar-hidden');
+    for (let i = 0; i < 3; i++) spawnEnemy('speedy');
+    for (let i = 0; i < 2; i++) spawnEnemy('drone');
+    guideTextEl.textContent = "第四關！超高速電磁機動僚機來襲，考驗靈敏瞄準！";
+  } else if (stageNum === 5) {
+    stageBadge.textContent = "STAGE 5 · 巡航巨艦 (MID-BOSS)";
     sound.playBossAlert();
     bossWarningBanner.classList.remove('hidden');
     setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
 
-    // 展開頂部 BOSS 血條
     bossBarContainer.classList.remove('boss-bar-hidden');
+    bossNameEl.textContent = "DREADNOUGHT · 巡航巨艦";
     bossBarFill.style.width = '100%';
     bossHpText.textContent = '100%';
 
-    // 召喚巨型 OMEGA BOSS + 2 隻僚機
-    spawnEnemy('boss');
+    spawnEnemy('miniboss');
     for (let i = 0; i < 2; i++) spawnEnemy('drone');
-    guideTextEl.textContent = "⚠️ 破壞神降臨！蓄力出掌，全彈齊射消滅巨型核心！";
+    guideTextEl.textContent = "⚠️ 第五關警報！巡航巨艦降臨！集滿能量手刀劈下，氣圓斬一刀切開！";
+  } else if (stageNum === 6) {
+    stageBadge.textContent = "STAGE 6 · 重裝防線";
+    bossBarContainer.classList.add('boss-bar-hidden');
+    for (let i = 0; i < 2; i++) spawnEnemy('armored');
+    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
+    guideTextEl.textContent = "第六關！重型能量護盾機群，握拳鎖定全彈追尾齊射！";
+  } else if (stageNum === 7) {
+    stageBadge.textContent = "STAGE 7 · 雙子精英";
+    bossBarContainer.classList.add('boss-bar-hidden');
+    spawnEnemy('elite', new THREE.Vector3(-0.9, 0.2, -3.8), 7);
+    spawnEnemy('elite', new THREE.Vector3(0.9, 0.2, -3.8), 7);
+    for (let i = 0; i < 3; i++) spawnEnemy('drone');
+    guideTextEl.textContent = "第七關！雙子精英戰機聯手出擊，注意螢幕邊緣雷達箭頭！";
+  } else if (stageNum === 8) {
+    stageBadge.textContent = "STAGE 8 · 雙重母艦 (TWIN BOSS)";
+    sound.playBossAlert();
+    bossWarningBanner.classList.remove('hidden');
+    setTimeout(() => bossWarningBanner.classList.add('hidden'), 2600);
+
+    bossBarContainer.classList.remove('boss-bar-hidden');
+    bossNameEl.textContent = "TWIN TITANS · 雙子巨艦";
+    bossBarFill.style.width = '100%';
+    bossHpText.textContent = '100%';
+
+    spawnEnemy('miniboss', new THREE.Vector3(-1.1, 0.25, -4.0), 16);
+    spawnEnemy('miniboss', new THREE.Vector3(1.1, 0.25, -4.0), 16);
+    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
+    guideTextEl.textContent = "⚠️ 第八關警告！雙重巨艦同時壓境，全力蓄力氣圓斬轟殺！";
+  } else if (stageNum === 9) {
+    stageBadge.textContent = "STAGE 9 · 毀滅前夕";
+    bossBarContainer.classList.add('boss-bar-hidden');
+    spawnEnemy('armored', null, 9);
+    spawnEnemy('armored', null, 9);
+    spawnEnemy('elite', null, 7);
+    for (let i = 0; i < 2; i++) spawnEnemy('speedy');
+    guideTextEl.textContent = "第九關！敵軍全主力大混戰！消滅所有敵人，迎向終局之戰！";
+  } else if (stageNum === 10) {
+    stageBadge.textContent = "STAGE 10 · 終焉・破壞神降臨";
+    sound.playBossAlert();
+    bossWarningBanner.classList.remove('hidden');
+    setTimeout(() => bossWarningBanner.classList.add('hidden'), 2800);
+
+    bossBarContainer.classList.remove('boss-bar-hidden');
+    bossNameEl.textContent = "OMEGA DESTROYER · 毀滅星核";
+    bossBarFill.style.width = '100%';
+    bossHpText.textContent = '100%';
+
+    spawnEnemy('boss', null, 60);
+    spawnEnemy('elite', new THREE.Vector3(-1.3, -0.2, -3.8), 6);
+    spawnEnemy('elite', new THREE.Vector3(1.3, -0.2, -3.8), 6);
+    spawnEnemy('speedy');
+    spawnEnemy('speedy');
+    guideTextEl.textContent = "⚠️ 終局之戰！消滅 OMEGA 毀滅星核，拯救現實世界！";
   }
 }
 
@@ -1090,19 +1411,21 @@ function checkStageCompletion() {
     isStageTransition = true;
     sound.playStageClear();
 
-    if (currentStage < 3) {
+    if (currentStage < 10) {
       resultTitle.textContent = `🎉 STAGE ${currentStage} CLEAR!`;
-      resultSubtitle.textContent = "關卡完成！準備迎戰下一波";
+      resultSubtitle.textContent = `第 ${currentStage} 關完成！準備迎戰第 ${currentStage + 1} 關`;
       resultScore.textContent = score;
+      btnNextStage.textContent = `進入第 ${currentStage + 1} 關 ➔`;
       btnNextStage.classList.remove('hidden');
       btnRetry.classList.add('hidden');
       gameResultOverlay.classList.remove('hidden');
     } else {
-      // 破台通關！
-      resultTitle.textContent = "🏆 MISSION ACCOMPLISHED!";
-      resultSubtitle.textContent = "恭喜你！成功消滅 OMEGA BOSS，守護現實世界！";
+      // 破台通關！10 關全破！
+      resultTitle.textContent = "🏆 征服全 10 關・宇宙守護者！";
+      resultSubtitle.textContent = "太強了！你成功消滅 OMEGA 毀滅星核，拯救了現實世界！";
       resultScore.textContent = score;
       btnNextStage.classList.add('hidden');
+      btnRetry.textContent = "⚡ 重新挑戰 (STAGE 1)";
       btnRetry.classList.remove('hidden');
       gameResultOverlay.classList.remove('hidden');
     }
@@ -1660,9 +1983,9 @@ function animate() {
     t.rotation.y += t.userData.rotSpeedY * delta;
     t.position.y = t.userData.baseY + Math.sin(elapsedTime * 2 + t.userData.floatOffset) * 0.15;
 
-    // BOSS 護盾衛星環繞旋轉
-    if (t.userData.type === 'boss' && t.userData.satGroup) {
-      t.userData.satGroup.rotation.z += delta * 2.5;
+    // BOSS 與巨艦護盾衛星環繞旋轉
+    if (t.userData.satGroup) {
+      t.userData.satGroup.rotation.z += delta * (t.userData.type === 'boss' ? 2.5 : 3.5);
     }
   });
 
@@ -1709,9 +2032,51 @@ onResize();
 document.getElementById('btn-start').addEventListener('click', () => {
   document.getElementById('start-overlay').style.display = 'none';
   sound.init();
+  sound.startBGM(); // 啟動震撼賽博龐克背景音樂
   setupWebcam();
   startStage(1); // 啟動第 1 關！
 });
+
+// 💡 提示文字開關（讓玩家隨時自由隱藏文字不擋視野）
+btnToggleGuide.addEventListener('click', () => {
+  const isHidden = guideBox.classList.toggle('user-hidden');
+  if (isHidden) {
+    btnToggleGuide.classList.remove('active');
+    btnToggleGuide.classList.add('muted');
+    btnToggleGuide.innerHTML = `💡 <span class="toggle-text">提示: 關</span>`;
+  } else {
+    btnToggleGuide.classList.add('active');
+    btnToggleGuide.classList.remove('muted');
+    btnToggleGuide.innerHTML = `💡 <span class="toggle-text">提示: 開</span>`;
+  }
+});
+
+// 🎵 背景音樂開關
+btnToggleBgm.addEventListener('click', () => {
+  const isPlaying = sound.toggleBGM();
+  if (isPlaying) {
+    btnToggleBgm.classList.add('active');
+    btnToggleBgm.classList.remove('muted');
+    btnToggleBgm.innerHTML = `🎵 <span class="toggle-text">音樂: 開</span>`;
+  } else {
+    btnToggleBgm.classList.remove('active');
+    btnToggleBgm.classList.add('muted');
+    btnToggleBgm.innerHTML = `🔇 <span class="toggle-text">音樂: 關</span>`;
+  }
+});
+
+// 📖 新手教學彈窗開關事件
+const openTutorialModal = () => {
+  tutorialModal.classList.remove('hidden');
+};
+const closeTutorialModal = () => {
+  tutorialModal.classList.add('hidden');
+};
+
+btnOpenTutorial.addEventListener('click', openTutorialModal);
+btnStartMenuTutorial.addEventListener('click', openTutorialModal);
+btnCloseTutorial.addEventListener('click', closeTutorialModal);
+btnTutorialGotIt.addEventListener('click', closeTutorialModal);
 
 // 手動發射按鈕
 document.getElementById('btn-fire').addEventListener('click', () => {

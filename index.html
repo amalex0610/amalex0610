@@ -40,6 +40,19 @@
             <span id="stage-badge">STAGE 1</span>
           </div>
 
+          <!-- 頂部快速切換快捷列 -->
+          <div class="hud-quick-toggles">
+            <button id="btn-toggle-guide" class="icon-toggle-btn active" title="開啟/關閉引導提示">
+              💡 <span class="toggle-text">提示: 開</span>
+            </button>
+            <button id="btn-toggle-bgm" class="icon-toggle-btn active" title="音樂開關">
+              🎵 <span class="toggle-text">音樂: 開</span>
+            </button>
+            <button id="btn-open-tutorial" class="icon-toggle-btn" title="查看新手教學">
+              ❓ <span class="toggle-text">教學</span>
+            </button>
+          </div>
+
           <!-- 擊破計分 -->
           <div class="score-box">
             <span class="score-label">擊破數</span>
@@ -70,7 +83,7 @@
           </div>
         </div>
 
-        <!-- 手勢引導提示 -->
+        <!-- 手勢引導提示 (支援自訂切換關閉，不擋視野) -->
         <div id="gesture-guide" class="guide-box">
           <div id="guide-icon">🖐️</div>
           <div id="guide-text">請將手伸入鏡頭前方</div>
@@ -126,11 +139,54 @@
         </div>
       </div>
 
-      <!-- 首次點擊啟動覆蓋層 -->
+      <!-- 📖 完整新手教學彈窗 (可隨時從開始選單或遊戲內打開) -->
+      <div id="tutorial-modal" class="hidden">
+        <div class="tutorial-card">
+          <div class="tutorial-header">
+            <h2>📜 氣功格鬥奧義書・新手教學</h2>
+            <button id="btn-close-tutorial" class="close-x-btn">&times;</button>
+          </div>
+          <div class="tutorial-scroll-content">
+            <div class="t-section">
+              <div class="t-badge">基礎 1</div>
+              <h3>🤲 掌心向上：聚氣凝神</h3>
+              <p>手掌伸入畫面中央，<b>掌心朝上平托</b>。體內的能量會迅速凝聚成氣功球，蓄力滿 80% 更會激發黃金光焰！</p>
+            </div>
+            <div class="t-section">
+              <div class="t-badge">基礎 2</div>
+              <h3>🎯 掌心游標：直覺瞄準</h3>
+              <p>手掌移到畫面哪裡，準心就精準跟到哪裡！就像用滑鼠指著目標一樣直觀靈敏。</p>
+            </div>
+            <div class="t-section">
+              <div class="t-badge">進階 1</div>
+              <h3>✊ 握緊拳頭：多重磁吸鎖定</h3>
+              <p>把手<b>握成拳頭</b>並在敵人上方掃過，會發出清脆提示音，一次最多<b>鎖定 5 隻目標</b>！</p>
+            </div>
+            <div class="t-section">
+              <div class="t-badge">進階 2</div>
+              <h3>💥 轟然出掌：全彈齊射</h3>
+              <p>鎖定目標後，張開手掌用力<b>向前一推（出掌）</b>，弧形追蹤雷射齊射而出，自動追尾轟殺全場！</p>
+            </div>
+            <div class="t-section highlight-t-section">
+              <div class="t-badge gold-badge">奧義</div>
+              <h3>💿 必殺・氣圓斬：一刀兩斷！</h3>
+              <p>當能量集滿 80% 變成黃金光輪時，手掌做出快速<b>揮砍劈下（手刀）</b>，高速氣圓斬將直接把敵人<b>劈成兩半</b>爆裂！</p>
+            </div>
+            <div class="t-section">
+              <div class="t-badge">貼心功能</div>
+              <h3>💡 教學提示與音樂自由開關</h3>
+              <p>覺得螢幕文字太多？遊戲上方隨時點擊 <b>【💡 提示開關】</b> 即可隱藏所有文字，享受清爽純粹的沉浸式戰場！</p>
+            </div>
+          </div>
+          <button id="btn-tutorial-got-it" class="start-btn">我學會了！準備戰鬥</button>
+        </div>
+      </div>
+
+      <!-- 首次點擊啟動覆蓋層 (開始選單) -->
       <div id="start-overlay">
         <div class="start-card">
           <h1>⚡ AR 氣功破 ⚡</h1>
-          <p class="subtitle">關卡波次挑戰 ＆ 敵人雷達導航已就緒！</p>
+          <p class="subtitle">全 10 關史詩戰役 ＆ 必殺氣圓斬參戰！</p>
           <div class="instructions">
             <div class="step-item">
               <span class="step-num">1</span>
@@ -138,11 +194,11 @@
             </div>
             <div class="step-item">
               <span class="step-num">2</span>
-              <span><b>掌心對準</b>：移動手掌，準心直接跟隨手掌位置！</span>
+              <span><b>掌心對準</b>：手掌移動，準心隨動瞄準！</span>
             </div>
             <div class="step-item">
               <span class="step-num">3</span>
-              <span><b>握拳掃描</b>：握拳移過敵人即可連續鎖定 (最多 5 體)</span>
+              <span><b>握拳鎖定</b>：拳頭掃過敵人連續鎖定 (最多 5 體)</span>
             </div>
             <div class="step-item">
               <span class="step-num">4</span>
@@ -150,10 +206,15 @@
             </div>
             <div class="step-item highlight-step">
               <span class="step-num">💿</span>
-              <span><b>必殺・氣圓斬</b>：能量集滿時，手掌快速<b>揮砍劈下</b>，發射光輪將敵人<b>切成兩半</b>！</span>
+              <span><b>必殺氣圓斬</b>：能量滿時<b>手刀揮砍</b>，一刀兩斷！</span>
             </div>
           </div>
-          <button id="btn-start" class="start-btn">🔥 啟動 AR 模式</button>
+
+          <!-- 開始選單功能按鈕群 -->
+          <div class="menu-btn-group">
+            <button id="btn-start" class="start-btn">🔥 啟動 AR 進入戰場</button>
+            <button id="btn-start-menu-tutorial" class="tutorial-btn">📖 新手奧義教學</button>
+          </div>
           <p class="hint-text">* 請在 Safari 彈出詢問時選擇「允許相機權限」</p>
         </div>
       </div>
