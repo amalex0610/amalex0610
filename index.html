@@ -1,274 +1,2142 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>AR 氣功破 - 手勢破壞遊戲</title>
-    <link rel="stylesheet" href="/src/style.css" />
-    <!-- MediaPipe Hands -->
-    <script src="mediapipe/hands.js"></script>
-  </head>
-  <body>
-    <div id="game-container">
-      <!-- 攝影機視訊背景 -->
-      <video id="webcam" playsinline autoplay muted></video>
-      
-      <!-- Three.js 3D 渲染層 -->
-      <canvas id="ar-canvas"></canvas>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AR 撞球大師 (AR 8-Ball Master) | AI 手勢體感 WebAR</title>
+  
+  <!-- Three.js 3D 渲染庫 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google MediaPipe Hands 輕量化手勢庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
-      <!-- 2D 手部骨架輔助畫布 (輕量反饋) -->
-      <canvas id="hand-debug-canvas"></canvas>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
 
-      <!-- BOSS 出場全螢幕警戒橫幅 -->
-      <div id="boss-warning-banner" class="hidden">
-        <div class="warning-stripes"></div>
-        <div class="warning-text">⚠️ WARNING: BOSS DETECTED ⚠️</div>
-        <div class="warning-stripes"></div>
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Noto Sans TC", sans-serif;
+      color: #fff;
+    }
+
+    #app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* 攝影機 AR 透視層 (最底層) */
+    #webcam-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      transform: scaleX(1); /* 前鏡頭時會由 JS 動態改為 -1 */
+    }
+
+    /* 3D 撞球 WebGL 渲染層 */
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: auto;
+    }
+
+    /* 手勢偵測骨架繪製層 */
+    #gesture-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /* 頂部 HUD 資訊列 */
+    #top-hud {
+      position: absolute;
+      top: env(safe-area-inset-top, 10px);
+      left: 10px;
+      right: 10px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .hud-glass {
+      background: rgba(16, 22, 34, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    #player-status-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      pointer-events: auto;
+    }
+
+    .player-badge {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .player-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .player-target {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .highlight-active {
+      color: #38ef7d;
+      text-shadow: 0 0 10px rgba(56, 239, 125, 0.5);
+    }
+
+    #hud-controls {
+      display: flex;
+      gap: 6px;
+      pointer-events: auto;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(22, 30, 46, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f8fafc;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+
+    .icon-btn:active {
+      transform: scale(0.92);
+      background: rgba(56, 189, 248, 0.3);
+    }
+
+    /* 手勢提示狀態膠囊 */
+    #gesture-pill {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 10px) + 56px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      transition: all 0.25s ease;
+    }
+
+    .gesture-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* 進球托盤 (已進球展示) */
+    #balls-tray {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 10px) + 94px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 20px;
+      pointer-events: none;
+      max-width: 90vw;
+      overflow-x: auto;
+    }
+
+    .tray-ball-chip {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 9px;
+      font-weight: bold;
+      color: #000;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      flex-shrink: 0;
+    }
+
+    /* 底部擊球與觸控控制條 */
+    #bottom-control-dock {
+      position: absolute;
+      bottom: env(safe-area-inset-bottom, 15px);
+      left: 12px;
+      right: 12px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    #aim-angle-wheel {
+      pointer-events: auto;
+      flex: 1;
+      max-width: 200px;
+      height: 48px;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    #angle-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+    }
+    #angle-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #38bdf8;
+      box-shadow: 0 0 10px #38bdf8;
+      cursor: pointer;
+    }
+
+    /* 蓄力擊球拉桿 */
+    #power-dock {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #power-meter-container {
+      width: 140px;
+      height: 44px;
+      border-radius: 22px;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    #power-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 18px;
+      background: linear-gradient(90deg, #10b981 0%, #f59e0b 60%, #ef4444 100%);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+      transition: width 0.05s ease-out;
+    }
+
+    #power-label {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      pointer-events: none;
+    }
+
+    #shoot-btn {
+      width: 60px;
+      height: 60px;
+      border-radius: 30px;
+      background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      color: #032b17;
+      font-weight: 900;
+      font-size: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 6px 20px rgba(56, 239, 125, 0.5);
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    #shoot-btn:active {
+      transform: scale(0.92);
+      box-shadow: 0 2px 10px rgba(56, 239, 125, 0.3);
+    }
+
+    /* 遊戲中央大提示 (例如：開球、犯規、自由球、勝利) */
+    #center-banner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      z-index: 20;
+      padding: 16px 28px;
+      border-radius: 16px;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    #center-banner.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #banner-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    #banner-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    /* 自由球提示小框 */
+    #ball-in-hand-prompt {
+      position: absolute;
+      top: 140px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      background: rgba(239, 68, 68, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      display: none;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.9; transform: translateX(-50%) scale(1); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.04); }
+    }
+
+    /* AR 調整視窗 Modal */
+    #ar-settings-modal {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 420px;
+      padding: 18px 20px;
+      border-radius: 20px;
+      z-index: 30;
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .modal-row label {
+      width: 75px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .modal-row input[type=range] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+    }
+
+    .modal-row span {
+      width: 45px;
+      text-align: right;
+      font-family: monospace;
+      color: #38bdf8;
+    }
+
+    .modal-btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .modal-btn.primary {
+      background: #0284c7;
+      border-color: #38bdf8;
+    }
+
+    /* 啟動遮罩 (需要使用者點擊以解鎖相機與 Web Audio) */
+    #start-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    #start-card {
+      max-width: 440px;
+      padding: 32px 24px;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .game-logo {
+      font-size: 54px;
+      filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.6));
+    }
+
+    .game-title {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #38bdf8 0%, #38ef7d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .game-features {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.6;
+      text-align: left;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 14px 16px;
+      border-radius: 14px;
+      width: 100%;
+    }
+
+    .game-features li {
+      margin-left: 20px;
+      margin-bottom: 6px;
+    }
+
+    #enter-game-btn {
+      width: 100%;
+      padding: 16px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #0284c7 0%, #059669 100%);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      box-shadow: 0 8px 25px rgba(2, 132, 199, 0.5);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    #enter-game-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* 效能即時狀態指示燈 (iPhone XR 最佳化) */
+    #perf-badge {
+      font-size: 10px;
+      color: #64748b;
+      font-family: monospace;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <!-- AR 實景鏡頭底層 -->
+    <video id="webcam-video" playsinline muted autoplay></video>
+
+    <!-- 3D 渲染與物理模擬層 -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- AI 手勢骨架視覺層 -->
+    <canvas id="gesture-canvas"></canvas>
+
+    <!-- 頂部資訊與控制列 -->
+    <div id="top-hud">
+      <div id="player-status-card" class="hud-glass">
+        <div class="player-badge">
+          <div class="player-name">
+            <span id="turn-indicator">⚪</span>
+            <span id="player-label">玩家 1 擊球</span>
+          </div>
+          <div id="target-group-label" class="player-target">球組：尚未選定 (Open)</div>
+        </div>
       </div>
 
-      <!-- 氣圓斬發動浮動橫幅 -->
-      <div id="kienzan-banner" class="hidden">
-        <span class="kienzan-icon">💿</span> <span class="kienzan-text">氣圓斬！一刀兩斷！</span>
-      </div>
-
-      <!-- ⚡ 神極共鳴貫穿砲發動浮動橫幅 -->
-      <div id="resonance-banner" class="hidden">
-        <span class="resonance-icon">⚡</span> <span class="resonance-text">神極共鳴貫穿砲！全場貫穿蒸發！</span>
-      </div>
-
-      <!-- ⚡ 全螢幕邊緣共鳴電光氣焰覆蓋層 -->
-      <div id="resonance-overlay"></div>
-
-      <!-- 💥 受到攻擊受傷紅框閃爍覆蓋層 -->
-      <div id="damage-overlay"></div>
-
-      <!-- 🌊 波次推進橫幅 (WAVE 2/2 敵軍增援) -->
-      <div id="wave-banner" class="hidden">
-        <span class="wave-icon">⚡</span> <span id="wave-banner-text">WAVE 2/2 · 敵軍主力增援！</span>
-      </div>
-
-      <!-- UI HUD 介面 -->
-      <div id="hud-overlay">
-        <!-- 頂部資訊列 -->
-        <header class="hud-header">
-          <!-- 關卡與波次標籤 -->
-          <div class="stage-box">
-            <span id="stage-badge">STAGE 1</span>
-            <span id="wave-badge" class="wave-tag">W1</span>
-          </div>
-
-          <!-- 玩家能量防護罩 -->
-          <div class="hp-box" id="player-shield-box" title="玩家防護罩 (遭敵彈命中會扣減)">
-            <span id="shield-cells">🛡️🛡️🛡️</span>
-          </div>
-
-          <!-- 頂部快速切換快捷列 -->
-          <div class="hud-quick-toggles">
-            <button id="btn-toggle-guide" class="icon-toggle-btn active" title="開啟/關閉引導提示">
-              💡 <span class="toggle-text">提示: 開</span>
-            </button>
-            <button id="btn-toggle-bgm" class="icon-toggle-btn active" title="音樂開關">
-              🎵 <span class="toggle-text">音樂: 開</span>
-            </button>
-            <button id="btn-open-tutorial" class="icon-toggle-btn" title="查看新手教學">
-              ❓ <span class="toggle-text">教學</span>
-            </button>
-          </div>
-
-          <!-- 擊破計分 -->
-          <div class="score-box">
-            <span class="score-label">擊破數</span>
-            <span id="score-counter">0</span>
-          </div>
-        </header>
-
-        <!-- 螢幕邊緣敵人雷達引導箭頭容器 -->
-        <div id="enemy-indicators-container"></div>
-
-        <!-- BOSS 專屬巨型血條 (僅在 BOSS 關卡出現) -->
-        <div id="boss-bar-container" class="boss-bar-hidden">
-          <div class="boss-title-row">
-            <span class="boss-tag">⚠️ BOSS</span>
-            <span id="boss-name">OMEGA DESTROYER · 毀滅核心</span>
-            <span id="boss-hp-text">100%</span>
-          </div>
-          <div class="boss-bar-bg">
-            <div id="boss-bar-fill"></div>
-          </div>
-        </div>
-
-        <!-- 狀態指示徽章 -->
-        <div class="hud-status-row">
-          <div class="hud-badge pulse-glow">
-            <span class="status-dot"></span>
-            <span id="tracking-status">初始化 AR 鏡頭...</span>
-          </div>
-        </div>
-
-        <!-- 手勢引導提示 (支援自訂切換關閉，不擋視野) -->
-        <div id="gesture-guide" class="guide-box">
-          <div id="guide-icon">🖐️</div>
-          <div id="guide-text">請將手伸入鏡頭前方</div>
-        </div>
-
-        <!-- 畫面動態準心 -->
-        <div id="reticle">
-          <div class="reticle-ring"></div>
-          <div class="reticle-dot"></div>
-        </div>
-
-        <!-- ⚡ 拇指雙重共鳴奧義鈕 (一手持機，拇指長按引發共鳴) -->
-        <button id="btn-resonance" class="resonance-btn" title="一手持機時，拇指按住引發雙重共鳴！">
-          <div class="resonance-ring-glow"></div>
-          <div class="resonance-core">
-            <span class="resonance-icon">⚡</span>
-            <span class="resonance-label">神極共鳴</span>
-          </div>
-        </button>
-
-        <!-- 底部控制與能量條 -->
-        <footer class="hud-footer">
-          <!-- 氣功蓄力計量條 -->
-          <div class="charge-container">
-            <div class="charge-label-row">
-              <span>氣功蓄力 (KI ENERGY)</span>
-              <span id="charge-percent">0%</span>
-            </div>
-            <div class="charge-bar-bg">
-              <div id="charge-bar-fill"></div>
-            </div>
-          </div>
-
-          <!-- 功能操作按鈕列 -->
-          <div class="controls-row">
-            <button id="btn-switch-cam" class="hud-btn" title="切換前後鏡頭">
-              🔄 切換鏡頭
-            </button>
-            <button id="btn-fire" class="hud-btn fire-btn" title="手動釋放氣功波">
-              💥 氣功發射！
-            </button>
-            <button id="btn-add-target" class="hud-btn" title="在鏡頭前生成目標">
-              🎯 放置目標
-            </button>
-          </div>
-        </footer>
-      </div>
-
-      <!-- 關卡結算 / 遊戲結束彈窗 -->
-      <div id="game-result-overlay" class="hidden">
-        <div class="result-card">
-          <h1 id="result-title">🎉 STAGE CLEAR!</h1>
-          <p id="result-subtitle" class="subtitle">戰績報告</p>
-          <div class="result-stats">
-            <div class="stat-row">
-              <span>總擊破數</span>
-              <span id="result-score" class="stat-val">0</span>
-            </div>
-          </div>
-          <button id="btn-next-stage" class="start-btn">進入下一波次 ➔</button>
-          <button id="btn-retry" class="start-btn hidden">⚡ 重新挑戰</button>
-        </div>
-      </div>
-
-      <!-- 📖 完整新手教學彈窗 (可隨時從開始選單或遊戲內打開) -->
-      <div id="tutorial-modal" class="hidden">
-        <div class="tutorial-card">
-          <div class="tutorial-header">
-            <h2>📜 氣功格鬥奧義書・新手教學</h2>
-            <button id="btn-close-tutorial" class="close-x-btn">&times;</button>
-          </div>
-          <div class="tutorial-scroll-content">
-            <div class="t-section">
-              <div class="t-badge">基礎 1</div>
-              <h3>🤲 掌心向上：聚氣凝神</h3>
-              <p>手掌伸入畫面中央，<b>掌心朝上平托</b>。體內的能量會迅速凝聚成氣功球，蓄力滿 80% 更會激發黃金光焰！</p>
-            </div>
-            <div class="t-section">
-              <div class="t-badge">基礎 2</div>
-              <h3>🎯 掌心游標：直覺瞄準</h3>
-              <p>手掌移到畫面哪裡，準心就精準跟到哪裡！就像用滑鼠指著目標一樣直觀靈敏。</p>
-            </div>
-            <div class="t-section">
-              <div class="t-badge">進階 1</div>
-              <h3>✊ 握緊拳頭：多重磁吸鎖定</h3>
-              <p>把手<b>握成拳頭</b>並在敵人上方掃過，會發出清脆提示音，一次最多<b>鎖定 5 隻目標</b>！</p>
-            </div>
-            <div class="t-section">
-              <div class="t-badge">進階 2</div>
-              <h3>💥 轟然出掌：全彈齊射</h3>
-              <p>鎖定目標後，張開手掌用力<b>向前一推（出掌）</b>，弧形追蹤雷射齊射而出，自動追尾轟殺全場！</p>
-            </div>
-            <div class="t-section highlight-t-section">
-              <div class="t-badge gold-badge">奧義 1</div>
-              <h3>💿 必殺・氣圓斬：一刀兩斷！</h3>
-              <p>當能量集滿 80% 變成黃金光輪時，手掌做出快速<b>揮砍劈下（手刀）</b>，高速氣圓斬將直接把敵人<b>劈成兩半</b>爆裂！</p>
-            </div>
-            <div class="t-section highlight-t-section resonance-section">
-              <div class="t-badge cyan-badge">奧義 2</div>
-              <h3>⚡ 拇指共鳴・神極能量砲！</h3>
-              <p>右手揮拳時，<b>左手握機的拇指長按左下角【⚡ 神極共鳴】</b>，右手向前推掌，即可釋放<b>貫穿全場敵機</b>的毀滅級超粗能量神砲！</p>
-            </div>
-            <div class="t-section highlight-t-section parry-section">
-              <div class="t-badge gold-badge">防禦秘技</div>
-              <h3>🛡️ 手刀彈刀（Parry）彈碎敵彈！</h3>
-              <p>精英機與母艦會對玩家發射電漿光彈！只要用手掌<b>朝著飛來的敵彈揮動或出掌</b>，即可<b>將敵彈當場彈碎</b>，保護 3 格防護罩完好！</p>
-            </div>
-            <div class="t-section">
-              <div class="t-badge">貼心功能</div>
-              <h3>💡 教學提示與音樂自由開關</h3>
-              <p>覺得螢幕文字太多？遊戲上方隨時點擊 <b>【💡 提示開關】</b> 即可隱藏所有文字，享受清爽純粹的沉浸式戰場！</p>
-            </div>
-          </div>
-          <button id="btn-tutorial-got-it" class="start-btn">我學會了！準備戰鬥</button>
-        </div>
-      </div>
-
-      <!-- 首次點擊啟動覆蓋層 (開始選單) -->
-      <div id="start-overlay">
-        <div class="start-card">
-          <h1>⚡ AR 氣功破 ⚡</h1>
-          <p class="subtitle">全 10 關史詩戰役 ＆ 雙重共鳴神砲參戰！</p>
-          <div class="instructions">
-            <div class="step-item">
-              <span class="step-num">1</span>
-              <span><b>掌心向上</b>：托天聚氣，凝聚氣功球</span>
-            </div>
-            <div class="step-item">
-              <span class="step-num">2</span>
-              <span><b>掌心對準</b>：手掌移動，準心隨動瞄準！</span>
-            </div>
-            <div class="step-item">
-              <span class="step-num">3</span>
-              <span><b>握拳鎖定</b>：拳頭掃過敵人連續鎖定 (最多 5 體)</span>
-            </div>
-            <div class="step-item">
-              <span class="step-num">4</span>
-              <span><b>轟然出掌</b>：全彈齊射！分裂弧線追蹤雷射齊轟！</span>
-            </div>
-            <div class="step-item highlight-step">
-              <span class="step-num">💿</span>
-              <span><b>必殺氣圓斬</b>：能量滿時<b>手刀揮砍</b>，一刀兩斷！</span>
-            </div>
-            <div class="step-item highlight-step resonance-step">
-              <span class="step-num">⚡</span>
-              <span><b>拇指共鳴奧義</b>：左手拇指按<b>【⚡ 共鳴】</b>＋推掌發射全屏貫穿神砲！</span>
-            </div>
-            <div class="step-item parry-step">
-              <span class="step-num parry-num">🛡️</span>
-              <span><b>手刀彈刀格擋</b>：手掌朝飛來的敵彈揮拍，彈碎敵襲保命！</span>
-            </div>
-          </div>
-
-          <!-- 開始選單功能按鈕群 -->
-          <div class="menu-btn-group">
-            <button id="btn-start" class="start-btn">🔥 啟動 AR 進入戰場</button>
-            <button id="btn-start-menu-tutorial" class="tutorial-btn">📖 新手奧義教學</button>
-          </div>
-          <p class="hint-text">* 請在 Safari 彈出詢問時選擇「允許相機權限」</p>
-        </div>
+      <div id="hud-controls">
+        <button id="camera-flip-btn" class="icon-btn" title="切換前後鏡頭">📷</button>
+        <button id="ar-config-btn" class="icon-btn" title="AR 球桌擺放校準">📐</button>
+        <button id="mode-toggle-btn" class="icon-btn" title="切換 AI 手勢 / 觸控模式">🖐️</button>
+        <button id="reset-game-btn" class="icon-btn" title="重新開局">🔄</button>
       </div>
     </div>
 
-    <script type="module" src="/src/main.js"></script>
-  </body>
+    <!-- AI 手勢提示膠囊 -->
+    <div id="gesture-pill" class="hud-glass">
+      <div class="gesture-indicator-dot" id="gesture-dot"></div>
+      <span id="gesture-text">AI 手勢偵測中...</span>
+    </div>
+
+    <!-- 已落袋球列表 (Tray) -->
+    <div id="balls-tray" class="hud-glass"></div>
+
+    <!-- 自由球提示小框 -->
+    <div id="ball-in-hand-prompt">
+      <span>⚠️ 犯規獲得自由球！可拖曳母球至任意位置</span>
+    </div>
+
+    <!-- 底部控制列 (角度微調 + 力量拉桿 + 擊球) -->
+    <div id="bottom-control-dock">
+      <div id="aim-angle-wheel" class="hud-glass">
+        <span>瞄準</span>
+        <input type="range" id="angle-slider" min="0" max="360" value="0">
+      </div>
+
+      <div id="power-dock">
+        <div id="power-meter-container" class="hud-glass">
+          <div id="power-fill"></div>
+          <div id="power-label">蓄力 0%</div>
+        </div>
+        <button id="shoot-btn">擊球</button>
+      </div>
+    </div>
+
+    <!-- 局況大字橫幅提示 -->
+    <div id="center-banner" class="hud-glass">
+      <div id="banner-title">GAME START</div>
+      <div id="banner-desc">開球局，請將母球擊入球群！</div>
+    </div>
+
+    <!-- AR 球桌擺放與校準視窗 -->
+    <div id="ar-settings-modal" class="hud-glass">
+      <div style="font-weight: 800; font-size: 15px; color: #38bdf8; display:flex; justify-content:space-between; align-items:center;">
+        <span>AR 球桌空間調校</span>
+        <span style="font-size:11px; color:#94a3b8;">適配室內書桌與地板</span>
+      </div>
+
+      <div class="modal-row">
+        <label>縮放大小</label>
+        <input type="range" id="cfg-scale" min="0.25" max="1.5" step="0.05" value="0.55">
+        <span id="val-scale">0.55x</span>
+      </div>
+
+      <div class="modal-row">
+        <label>球桌高度</label>
+        <input type="range" id="cfg-height" min="-1.5" max="0.5" step="0.05" value="-0.25">
+        <span id="val-height">-0.25m</span>
+      </div>
+
+      <div class="modal-row">
+        <label>距離前後</label>
+        <input type="range" id="cfg-dist" min="0.8" max="3.0" step="0.1" value="1.4">
+        <span id="val-dist">1.4m</span>
+      </div>
+
+      <div class="modal-row">
+        <label>水平旋轉</label>
+        <input type="range" id="cfg-rot" min="0" max="360" step="5" value="0">
+        <span id="val-rot">0°</span>
+      </div>
+
+      <div class="modal-row">
+        <label>俯仰傾角</label>
+        <input type="range" id="cfg-pitch" min="-20" max="45" step="2" value="15">
+        <span id="val-pitch">15°</span>
+      </div>
+
+      <div class="modal-btn-group">
+        <button class="modal-btn" id="cfg-reset-btn">恢復預設</button>
+        <button class="modal-btn primary" id="cfg-close-btn">確認鎖定</button>
+      </div>
+    </div>
+
+    <!-- 首次點擊啟動引導遮罩 -->
+    <div id="start-overlay">
+      <div id="start-card" class="hud-glass">
+        <div class="game-logo">🎱</div>
+        <div class="game-title">AR 撞球大師</div>
+        <div style="font-size: 13px; color: #94a3b8;">美式 8 號球 × AI 手勢體感 WebAR</div>
+
+        <ul class="game-features">
+          <li>✨ <b>真實桌上撞球</b>：相機透視 AR，自由縮放貼合書桌！</li>
+          <li>🖐️ <b>AI 手勢握桿推擊</b>：鏡頭前捏合食指拇指蓄力推擊！</li>
+          <li>🎯 <b>雙重輔助瞄準</b>：母球運動路徑與碰撞反彈預測線！</li>
+          <li>⚡ <b>iPhone XR 極致流暢</b>：抗熱降頻節流，穩定 60 FPS！</li>
+          <li>📱 <b>全功能備用操控</b>：手勢與螢幕滑桿隨時無縫切換！</li>
+        </ul>
+
+        <button id="enter-game-btn">開啟相機進入遊戲</button>
+        <div id="perf-badge">GPU Acceleration & MediaPipe Lite Enabled</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       1. 音效引擎：Procedural Web Audio (免下載音訊檔、零 GC 負載、iPhone XR 友善)
+       ========================================================================== */
+    class PoolAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.isUnlocked = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContextClass();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+        this.isUnlocked = true;
+      }
+
+      // 球與球相撞清脆撞擊聲 (依衝擊速度調整音量與頻率)
+      playBallHit(velocity = 1.0) {
+        if (!this.isUnlocked || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const speed = Math.min(Math.max(velocity, 0.1), 3.0);
+        const gainRatio = Math.min(speed / 2.0, 1.0);
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(3200 + speed * 400, now);
+        filter.Q.setValueAtTime(12, now);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(2600 + speed * 250, now);
+        osc.frequency.exponentialRampToValueAtTime(1400, now + 0.04);
+
+        gain.gain.setValueAtTime(0.7 * gainRatio, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.055);
+      }
+
+      // 庫邊反彈鈍擊聲
+      playCushionHit(velocity = 1.0) {
+        if (!this.isUnlocked || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const speed = Math.min(Math.max(velocity, 0.1), 3.0);
+        const gainRatio = Math.min(speed / 2.0, 0.9);
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(190 + speed * 30, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.08);
+
+        gain.gain.setValueAtTime(0.5 * gainRatio, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.085);
+      }
+
+      // 球桿擊球皮頭清脆撞擊聲
+      playCueStrike(power = 1.0) {
+        if (!this.isUnlocked || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const p = Math.min(Math.max(power, 0.1), 1.0);
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1500, now);
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(900 + p * 600, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.06);
+
+        gain.gain.setValueAtTime(0.6 * p, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.065);
+      }
+
+      // 落袋沉入球袋聲音
+      playPocketSink() {
+        if (!this.isUnlocked || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
+
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.23);
+      }
+    }
+
+    const audio = new PoolAudioEngine();
+
+
+    /* ==========================================================================
+       2. 撞球球體紋理生成器 (純 Canvas 動態繪製，無須下載貼圖，節省頻寬與內存)
+       ========================================================================== */
+    const BALL_COLORS = {
+      1: '#eab308', 2: '#2563eb', 3: '#dc2626', 4: '#9333ea',
+      5: '#ea580c', 6: '#16a34a', 7: '#991b1b', 8: '#111827',
+      9: '#eab308', 10: '#2563eb', 11: '#dc2626', 12: '#9333ea',
+      13: '#ea580c', 14: '#16a34a', 15: '#991b1b'
+    };
+
+    function generateBallTexture(ballNumber) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+
+      if (ballNumber === 0) {
+        // 白球 (母球)：象牙白 + Aramith 經典 6 顆紅點
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, 256, 128);
+        ctx.fillStyle = '#dc2626';
+        const spots = [
+          [64, 40], [192, 40], [128, 64], [64, 88], [192, 88]
+        ];
+        for (const [sx, sy] of spots) {
+          ctx.beginPath();
+          ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        const isStripe = ballNumber > 8;
+        const mainColor = BALL_COLORS[ballNumber] || '#111827';
+
+        if (isStripe) {
+          // 花球 (條紋球 9-15)：純白底 + 中央彩色條紋
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(0, 0, 256, 128);
+
+          ctx.fillStyle = mainColor;
+          ctx.fillRect(0, 32, 256, 64);
+        } else {
+          // 全色球 (1-8)：整體彩色
+          ctx.fillStyle = mainColor;
+          ctx.fillRect(0, 0, 256, 128);
+        }
+
+        // 兩側前後各繪製一個白色號碼圓徽章
+        const badgePositions = [64, 192];
+        for (const bx of badgePositions) {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(bx, 64, 18, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 18px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(ballNumber.toString(), bx, 64);
+        }
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      return texture;
+    }
+
+
+    /* ==========================================================================
+       3. 物理常數與規格定義 (2.5D 精確連續碰撞 CCD，零 GC，iPhone XR 超流暢)
+       ========================================================================== */
+    const TABLE_WIDTH = 0.9;     // 球桌寬度 (X軸，-0.45 ~ +0.45)
+    const TABLE_LENGTH = 1.8;    // 球桌長度 (Z軸，-0.90 ~ +0.90)
+    const BALL_RADIUS = 0.026;   // 球半徑 2.6cm (符合比例)
+    const BALL_DIAMETER = BALL_RADIUS * 2;
+    const POCKET_RADIUS = 0.052; // 球袋進球半徑
+    const CUSHION_RESTITUTION = 0.82; // 庫邊反彈彈性
+    const BALL_RESTITUTION = 0.96;    // 球與球彈性碰撞
+    const ROLLING_FRICTION = 0.989;   // 滾動摩擦力
+    const VELOCITY_STOP_THRESHOLD = 0.005; // 停止閾值
+
+    // 6 個球袋中心點 (X, Z)
+    const POCKETS = [
+      { id: 'top-left',     x: -TABLE_WIDTH / 2 + 0.02, z: -TABLE_LENGTH / 2 + 0.02 },
+      { id: 'top-right',    x:  TABLE_WIDTH / 2 - 0.02, z: -TABLE_LENGTH / 2 + 0.02 },
+      { id: 'mid-left',     x: -TABLE_WIDTH / 2 - 0.01, z: 0 },
+      { id: 'mid-right',    x:  TABLE_WIDTH / 2 + 0.01, z: 0 },
+      { id: 'bottom-left',  x: -TABLE_WIDTH / 2 + 0.02, z:  TABLE_LENGTH / 2 - 0.02 },
+      { id: 'bottom-right', x:  TABLE_WIDTH / 2 - 0.02, z:  TABLE_LENGTH / 2 - 0.02 }
+    ];
+
+
+    /* ==========================================================================
+       4. 撞球遊戲狀態機與 8 號球規則 (美式 8-Ball Official Rules)
+       ========================================================================== */
+    const GAME_STATES = {
+      AIMING: 'AIMING',           // 瞄準等待擊球中
+      CHARGING: 'CHARGING',       // 蓄力拉桿中
+      ROLLING: 'ROLLING',         // 球體滾動運動中
+      EVALUATING: 'EVALUATING',   // 擊球結算與判定
+      BALL_IN_HAND: 'BALL_IN_HAND', // 自由球擺放
+      GAME_OVER: 'GAME_OVER'      // 遊戲分出勝負結束
+    };
+
+    class BilliardsRulesEngine {
+      constructor() {
+        this.resetGame();
+      }
+
+      resetGame() {
+        this.currentPlayer = 1;     // 1 或 2 (雙人輪流)
+        this.playerGroups = { 1: null, 2: null }; // 'SOLID' (1-7) 或 'STRIPE' (9-15)
+        this.isBreakShot = true;     // 是否為開球桿
+        this.firstHitBall = null;    // 本桿母球第一個碰到的球
+        this.pocketedThisTurn = [];  // 本桿落袋的所有球
+        this.cushionHitAfterBall = false; // 擊球後是否有任何球碰庫
+        this.state = GAME_STATES.AIMING;
+        this.winner = null;
+        this.foulReason = null;
+      }
+
+      // 取得某號球的花色
+      getGroup(ballId) {
+        if (ballId >= 1 && ballId <= 7) return 'SOLID';
+        if (ballId >= 9 && ballId <= 15) return 'STRIPE';
+        if (ballId === 8) return 'EIGHT';
+        return 'CUE';
+      }
+
+      // 檢查某玩家的所有所屬目標球是否已全部清光
+      isGroupCleared(player, activeBalls) {
+        const group = this.playerGroups[player];
+        if (!group) return false;
+        return !activeBalls.some(b => !b.isPocketed && this.getGroup(b.id) === group);
+      }
+
+      // 一桿結束時的規則判定 (判定得分、犯規、換人、勝負)
+      evaluateTurn(activeBalls) {
+        const cueBallPocketed = this.pocketedThisTurn.some(b => b.id === 0);
+        const eightBallPocketed = this.pocketedThisTurn.some(b => b.id === 8);
+        const otherPocketed = this.pocketedThisTurn.filter(b => b.id !== 0 && b.id !== 8);
+
+        let foul = false;
+        let switchTurn = true;
+        let reason = '';
+
+        // 1. 開球桿特殊情況
+        if (this.isBreakShot) {
+          this.isBreakShot = false;
+          if (cueBallPocketed) {
+            foul = true;
+            reason = '開球母球洗袋！對手獲得線後自由球。';
+          } else if (eightBallPocketed) {
+            // 開球進 8 號球：直接重置 8 號球或判勝 (此處依美式友善規則重置 8 號球到腳點)
+            reason = '開球進 8 號球！傳奇一擊！8 號球重置。';
+            switchTurn = false;
+          } else if (otherPocketed.length > 0) {
+            // 開球有進其他球，繼續擊球，但檯面依然維持 Open
+            switchTurn = false;
+          }
+        } 
+        // 2. 常規擊球判決
+        else {
+          // A. 8 號球落袋處理
+          if (eightBallPocketed) {
+            const playerGroup = this.playerGroups[this.currentPlayer];
+            const groupCleared = this.isGroupCleared(this.currentPlayer, activeBalls);
+
+            if (cueBallPocketed) {
+              // 進 8 號球同時母球洗袋 -> 直接判負！
+              this.winner = this.currentPlayer === 1 ? 2 : 1;
+              this.state = GAME_STATES.GAME_OVER;
+              return { winner: this.winner, reason: `玩家 ${this.currentPlayer} 進 8 號球時母球洗袋，直接判負！` };
+            } else if (!groupCleared) {
+              // 自身花色球尚未清完就打進 8 號球 -> 直接判負！
+              this.winner = this.currentPlayer === 1 ? 2 : 1;
+              this.state = GAME_STATES.GAME_OVER;
+              return { winner: this.winner, reason: `玩家 ${this.currentPlayer} 自身花色未清空即進 8 號球，判負！` };
+            } else {
+              // 合法清台進 8 號球 -> 獲勝！
+              this.winner = this.currentPlayer;
+              this.state = GAME_STATES.GAME_OVER;
+              return { winner: this.winner, reason: `🎉 玩家 ${this.currentPlayer} 完美打進黑 8，贏得勝利！` };
+            }
+          }
+
+          // B. 母球洗袋犯規
+          if (cueBallPocketed) {
+            foul = true;
+            reason = '母球洗袋！對手獲得全場自由球。';
+          }
+          // C. 空桿未擊中任何球犯規
+          else if (!this.firstHitBall) {
+            foul = true;
+            reason = '空桿！母球未擊中任何子球。';
+          }
+          // D. 先碰對手球或先碰黑8犯規
+          else {
+            const myGroup = this.playerGroups[this.currentPlayer];
+            const firstHitGroup = this.getGroup(this.firstHitBall.id);
+
+            if (myGroup) {
+              const myCleared = this.isGroupCleared(this.currentPlayer, activeBalls);
+              if (!myCleared && firstHitGroup !== myGroup) {
+                foul = true;
+                reason = `犯規！母球未先擊中己方（${myGroup === 'SOLID' ? '全色' : '花球'}）球。`;
+              } else if (myCleared && firstHitGroup !== 'EIGHT') {
+                foul = true;
+                reason = '犯規！目標為黑 8 球，母球先碰到了其他球。';
+              }
+            }
+          }
+
+          // E. 未選定球組時的進球選組
+          if (!foul && !this.playerGroups[this.currentPlayer] && otherPocketed.length > 0) {
+            const firstValid = otherPocketed[0];
+            const assignedGroup = this.getGroup(firstValid.id);
+            this.playerGroups[this.currentPlayer] = assignedGroup;
+            this.playerGroups[this.currentPlayer === 1 ? 2 : 1] = (assignedGroup === 'SOLID' ? 'STRIPE' : 'SOLID');
+            reason = `玩家 ${this.currentPlayer} 選定【${assignedGroup === 'SOLID' ? '全色球 (1-7)' : '花球 (9-15)'}】！`;
+            switchTurn = false;
+          } 
+          // F. 已選組情況下的進球判斷
+          else if (!foul && otherPocketed.length > 0) {
+            const myGroup = this.playerGroups[this.currentPlayer];
+            const hasMyBallIn = otherPocketed.some(b => this.getGroup(b.id) === myGroup);
+            if (hasMyBallIn) {
+              switchTurn = false; // 合法打進自己的球，繼續擊球！
+            }
+          }
+        }
+
+        // 輪替玩家
+        if (foul) {
+          this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+          this.state = GAME_STATES.BALL_IN_HAND;
+        } else if (switchTurn) {
+          this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+          this.state = GAME_STATES.AIMING;
+        } else {
+          this.state = GAME_STATES.AIMING;
+        }
+
+        return { foul, reason, switchTurn, currentPlayer: this.currentPlayer };
+      }
+    }
+
+    const rules = new BilliardsRulesEngine();
+
+
+    /* ==========================================================================
+       5. 3D 場景建構與 AR 桌位調校系統 (Three.js)
+       ========================================================================== */
+    const canvas = document.getElementById('webgl-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      alpha: true, // 背景透明透出相機視訊
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    // iPhone XR 關鍵優化：限制 pixelRatio 最大 1.5，防發燙降頻
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = false; // 停用重度即時陰影，改用輕量接觸投影，省電防卡
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.05, 50);
+    camera.position.set(0, 1.3, 1.8);
+    camera.lookAt(0, 0, 0);
+
+    // 燈光設置
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff5e6, 0.85);
+    dirLight.position.set(1.5, 4.0, 2.0);
+    scene.add(dirLight);
+
+    // 桌子主群組 (包含球桌與所有球，可一體化旋轉、縮放與位移)
+    const tableGroup = new THREE.Group();
+    scene.add(tableGroup);
+
+    // 初始 AR 球桌參數 (適配桌面迷你比例)
+    const arConfig = {
+      scale: 0.55,
+      posY: -0.25,
+      posZ: -0.2,
+      rotY: 0,
+      pitch: 15 * (Math.PI / 180)
+    };
+
+    function updateTableTransform() {
+      tableGroup.scale.set(arConfig.scale, arConfig.scale, arConfig.scale);
+      tableGroup.position.set(0, arConfig.posY, arConfig.posZ);
+      tableGroup.rotation.set(arConfig.pitch, arConfig.rotY, 0);
+    }
+    updateTableTransform();
+
+    // 建立撞球桌本體
+    function buildTableMesh() {
+      const tableMeshGroup = new THREE.Group();
+
+      // 1. 檯面綠色毛呢 (Felt)
+      const feltGeo = new THREE.BoxGeometry(TABLE_WIDTH, 0.04, TABLE_LENGTH);
+      const feltMat = new THREE.MeshStandardMaterial({
+        color: 0x0d7343, // 經典英/美式撞球呢絨綠
+        roughness: 0.85,
+        metalness: 0.05
+      });
+      const felt = new THREE.Mesh(feltGeo, feltMat);
+      felt.position.y = -0.02;
+      tableMeshGroup.add(felt);
+
+      // 2. 開球線與腳點標記
+      const lineGeo = new THREE.PlaneGeometry(TABLE_WIDTH * 0.92, 0.003);
+      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+      const headLine = new THREE.Mesh(lineGeo, lineMat);
+      headLine.rotation.x = -Math.PI / 2;
+      headLine.position.set(0, 0.001, TABLE_LENGTH / 4);
+      tableMeshGroup.add(headLine);
+
+      // 3. 實木邊框與反彈庫邊 (Wood Rails & Rubber Cushions)
+      const woodMat = new THREE.MeshStandardMaterial({
+        color: 0x2b170c,
+        roughness: 0.4,
+        metalness: 0.15
+      });
+      const cushionMat = new THREE.MeshStandardMaterial({
+        color: 0x095230,
+        roughness: 0.6,
+        metalness: 0.05
+      });
+
+      const railHeight = 0.045;
+      const railThick = 0.06;
+
+      // 左右兩側邊框
+      const sideRailGeo = new THREE.BoxGeometry(railThick, railHeight, TABLE_LENGTH + railThick * 2);
+      const leftRail = new THREE.Mesh(sideRailGeo, woodMat);
+      leftRail.position.set(-TABLE_WIDTH / 2 - railThick / 2, railHeight / 2 - 0.015, 0);
+      const rightRail = leftRail.clone();
+      rightRail.position.x = TABLE_WIDTH / 2 + railThick / 2;
+      tableMeshGroup.add(leftRail, rightRail);
+
+      // 前後頂底邊框
+      const endRailGeo = new THREE.BoxGeometry(TABLE_WIDTH, railHeight, railThick);
+      const topRail = new THREE.Mesh(endRailGeo, woodMat);
+      topRail.position.set(0, railHeight / 2 - 0.015, -TABLE_LENGTH / 2 - railThick / 2);
+      const bottomRail = topRail.clone();
+      bottomRail.position.z = TABLE_LENGTH / 2 + railThick / 2;
+      tableMeshGroup.add(topRail, bottomRail);
+
+      // 4. 六個金屬/皮革球袋孔 (Pockets Visual)
+      const pocketMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+      const pocketGeo = new THREE.CylinderGeometry(POCKET_RADIUS, POCKET_RADIUS * 0.9, 0.045, 18);
+      POCKETS.forEach(p => {
+        const pocketHole = new THREE.Mesh(pocketGeo, pocketMat);
+        pocketHole.position.set(p.x, 0.001, p.z);
+        tableMeshGroup.add(pocketHole);
+      });
+
+      // 5. 輕量接觸環境光遮蔽底板 (Soft Contact Shadow)
+      const shadowGeo = new THREE.PlaneGeometry(TABLE_WIDTH * 1.25, TABLE_LENGTH * 1.25);
+      const shadowCanvas = document.createElement('canvas');
+      shadowCanvas.width = 128;
+      shadowCanvas.height = 128;
+      const sCtx = shadowCanvas.getContext('2d');
+      const grad = sCtx.createRadialGradient(64, 64, 20, 64, 64, 60);
+      grad.addColorStop(0, 'rgba(0,0,0,0.65)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(0, 0, 128, 128);
+      const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+      const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.8 });
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = -0.042;
+      tableMeshGroup.add(shadowMesh);
+
+      return tableMeshGroup;
+    }
+
+    const tableMesh = buildTableMesh();
+    tableGroup.add(tableMesh);
+
+
+    /* ==========================================================================
+       6. 撞球物件與三角架擺球 (Rack & Physics Entities)
+       ========================================================================== */
+    class BallEntity {
+      constructor(id, x, z) {
+        this.id = id;
+        this.x = x;
+        this.z = z;
+        this.vx = 0;
+        this.vz = 0;
+        this.isPocketed = false;
+        this.pocketAnimProgress = 0; // 落袋下沉動畫
+
+        // 3D 網格 (低段數球體 24x16，外觀精美且 iPhone XR 零壓力)
+        const geo = new THREE.SphereGeometry(BALL_RADIUS, 24, 16);
+        const texture = generateBallTexture(id);
+        const mat = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.25,
+          metalness: 0.15
+        });
+
+        this.mesh = new THREE.Mesh(geo, mat);
+        this.mesh.position.set(x, BALL_RADIUS, z);
+        tableGroup.add(this.mesh);
+
+        // 球底微型接觸陰影
+        const csGeo = new THREE.PlaneGeometry(BALL_RADIUS * 2.2, BALL_RADIUS * 2.2);
+        const csMat = new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: 0.4
+        });
+        this.shadow = new THREE.Mesh(csGeo, csMat);
+        this.shadow.rotation.x = -Math.PI / 2;
+        this.shadow.position.set(x, 0.001, z);
+        tableGroup.add(this.shadow);
+      }
+
+      updatePosition(dt) {
+        if (this.isPocketed) {
+          if (this.pocketAnimProgress < 1.0) {
+            this.pocketAnimProgress += dt * 4.0;
+            this.mesh.position.y = BALL_RADIUS - (this.pocketAnimProgress * 0.05);
+            this.mesh.scale.setScalar(Math.max(1.0 - this.pocketAnimProgress * 0.5, 0.01));
+            this.shadow.scale.setScalar(Math.max(1.0 - this.pocketAnimProgress, 0.01));
+          } else {
+            this.mesh.visible = false;
+            this.shadow.visible = false;
+          }
+          return;
+        }
+
+        // 位置推進
+        this.x += this.vx * dt;
+        this.z += this.vz * dt;
+
+        // 旋轉球體 (滾動角速度)
+        const speed = Math.hypot(this.vx, this.vz);
+        if (speed > 0.0001) {
+          const rotAngle = (speed * dt) / BALL_RADIUS;
+          const axisX = this.vz / speed;
+          const axisZ = -this.vx / speed;
+          this.mesh.rotateOnWorldAxis(new THREE.Vector3(axisX, 0, axisZ).normalize(), rotAngle);
+        }
+
+        this.mesh.position.x = this.x;
+        this.mesh.position.z = this.z;
+        this.shadow.position.x = this.x;
+        this.shadow.position.z = this.z;
+      }
+
+      applyFriction(friction) {
+        if (this.isPocketed) return;
+        this.vx *= friction;
+        this.vz *= friction;
+
+        if (Math.hypot(this.vx, this.vz) < VELOCITY_STOP_THRESHOLD) {
+          this.vx = 0;
+          this.vz = 0;
+        }
+      }
+
+      reset(x, z) {
+        this.x = x;
+        this.z = z;
+        this.vx = 0;
+        this.vz = 0;
+        this.isPocketed = false;
+        this.pocketAnimProgress = 0;
+        this.mesh.visible = true;
+        this.shadow.visible = true;
+        this.mesh.scale.setScalar(1.0);
+        this.shadow.scale.setScalar(1.0);
+        this.mesh.position.set(x, BALL_RADIUS, z);
+        this.shadow.position.set(x, 0.001, z);
+      }
+    }
+
+    let balls = [];
+    let cueBall = null;
+
+    // 標準美式 8 號球開球排球陣列 (Rack Setup)
+    function setupRack() {
+      // 銷毀舊球
+      balls.forEach(b => {
+        tableGroup.remove(b.mesh);
+        tableGroup.remove(b.shadow);
+      });
+      balls = [];
+
+      // 母球位置 (開球線中央)
+      cueBall = new BallEntity(0, 0, TABLE_LENGTH / 4);
+      balls.push(cueBall);
+
+      // 15 顆子球隨機洗牌，但保留規則：
+      // - 頂球在腳點 (Z = -TABLE_LENGTH / 4)
+      // - 8 號球固定在第 3 排中央
+      // - 底角兩顆球為不同組 (一顆全色、一顆花球)
+      const solids = [1, 2, 3, 4, 5, 6, 7];
+      const stripes = [9, 10, 11, 12, 13, 14, 15];
+      
+      // 打亂陣列
+      const shuffle = arr => arr.sort(() => Math.random() - 0.5);
+      shuffle(solids);
+      shuffle(stripes);
+
+      const rackOrder = [];
+      rackOrder[0] = solids.pop();   // 頂球 (第 1 排)
+      rackOrder[1] = stripes.pop();  // 第 2 排
+      rackOrder[2] = solids.pop();
+      rackOrder[3] = stripes.pop();  // 第 3 排 (8 號在中間)
+      rackOrder[4] = 8;
+      rackOrder[5] = solids.pop();
+      rackOrder[6] = solids.pop();   // 第 4 排
+      rackOrder[7] = stripes.pop();
+      rackOrder[8] = solids.pop();
+      rackOrder[9] = stripes.pop();
+      rackOrder[10] = solids.pop();  // 第 5 排 (兩底角異組)
+      rackOrder[11] = stripes.pop();
+      rackOrder[12] = solids.pop();
+      rackOrder[13] = stripes.pop();
+      rackOrder[14] = stripes.pop();
+
+      const footSpotZ = -TABLE_LENGTH / 4;
+      const rowSpacing = BALL_RADIUS * Math.sqrt(3) + 0.0008; // 緊密貼合
+      let ballIdx = 0;
+
+      for (let row = 0; row < 5; row++) {
+        const ballsInRow = row + 1;
+        const startX = -((ballsInRow - 1) * (BALL_RADIUS + 0.0004));
+        const rowZ = footSpotZ - (row * rowSpacing);
+
+        for (let col = 0; col < ballsInRow; col++) {
+          const ballX = startX + (col * (BALL_DIAMETER + 0.0008));
+          const num = rackOrder[ballIdx++];
+          balls.push(new BallEntity(num, ballX, rowZ));
+        }
+      }
+
+      rules.resetGame();
+      updateHUD();
+      renderPocketTray();
+    }
+
+
+    /* ==========================================================================
+       7. 3D 虛擬球桿與雙重瞄準預測線 (Cue Stick & Predictive Trajectory)
+       ========================================================================== */
+    class CueStick {
+      constructor() {
+        this.group = new THREE.Group();
+        this.pullDistance = 0;
+        this.angle = 0; // 瞄準弧度 (對準母球)
+
+        // 精緻雙色楓木球桿 (錐形桿身)
+        const cueGeo = new THREE.CylinderGeometry(0.005, 0.012, 0.85, 16);
+        cueGeo.rotateX(Math.PI / 2);
+        cueGeo.translate(0, 0, 0.425); // 樞紐點設於桿尖
+
+        const cueMat = new THREE.MeshStandardMaterial({
+          color: 0xdeb887,
+          roughness: 0.35,
+          metalness: 0.1
+        });
+
+        this.mesh = new THREE.Mesh(cueGeo, cueMat);
+
+        // 桿尖藍色巧克皮頭
+        const tipGeo = new THREE.CylinderGeometry(0.0052, 0.0052, 0.01, 16);
+        tipGeo.rotateX(Math.PI / 2);
+        tipGeo.translate(0, 0, 0.005);
+        const tipMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.8 });
+        this.tip = new THREE.Mesh(tipGeo, tipMat);
+        this.mesh.add(this.tip);
+
+        this.group.add(this.mesh);
+        tableGroup.add(this.group);
+
+        // 輔助瞄準路徑線
+        this.aimLineGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(6);
+        this.aimLineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        this.aimLineMat = new THREE.LineDashedMaterial({
+          color: 0x38ef7d,
+          dashSize: 0.03,
+          gapSize: 0.02,
+          linewidth: 2
+        });
+        this.aimLine = new THREE.Line(this.aimLineGeo, this.aimLineMat);
+        this.aimLine.computeLineDistances();
+        tableGroup.add(this.aimLine);
+
+        // 幽靈預測球 (Ghost Ball)
+        const ghostGeo = new THREE.SphereGeometry(BALL_RADIUS, 16, 12);
+        const ghostMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.55
+        });
+        this.ghostBall = new THREE.Mesh(ghostGeo, ghostMat);
+        this.ghostBall.visible = false;
+        tableGroup.add(this.ghostBall);
+      }
+
+      update(cueBall, isRolling) {
+        if (isRolling || cueBall.isPocketed) {
+          this.group.visible = false;
+          this.aimLine.visible = false;
+          this.ghostBall.visible = false;
+          return;
+        }
+
+        this.group.visible = true;
+        this.aimLine.visible = true;
+
+        // 更新球桿位置與角度 (朝向瞄準角度，從母球後方向後拉伸)
+        const baseOffset = BALL_RADIUS + 0.015 + this.pullDistance;
+        const dirX = Math.sin(this.angle);
+        const dirZ = Math.cos(this.angle);
+
+        this.group.position.set(
+          cueBall.x - dirX * baseOffset,
+          BALL_RADIUS + 0.012,
+          cueBall.z - dirZ * baseOffset
+        );
+
+        this.group.rotation.y = this.angle;
+        this.group.rotation.x = -0.08; // 微揚桿角
+
+        // 計算輔助瞄準線與第一碰球預測 (Raycast CCD)
+        this.calculateAimTrajectory(cueBall, dirX, dirZ);
+      }
+
+      calculateAimTrajectory(cueBall, dirX, dirZ) {
+        // 從母球朝 (dirX, dirZ) 發射射線
+        let closestDist = 2.5; // 最大可視線長
+        let hitBall = null;
+
+        for (const b of balls) {
+          if (b.id === 0 || b.isPocketed) continue;
+          // 計算母球前進路徑至各球中心的垂直距離
+          const toBx = b.x - cueBall.x;
+          const toBz = b.z - cueBall.z;
+          const dot = toBx * dirX + toBz * dirZ;
+          if (dot <= 0) continue; // 球在母球後方
+
+          const perpDistSq = (toBx * toBx + toBz * toBz) - (dot * dot);
+          const collisionDist = BALL_DIAMETER;
+          if (perpDistSq < collisionDist * collisionDist) {
+            // 會發生碰撞！計算沿射線前進多少距離會撞擊
+            const dHit = dot - Math.sqrt(collisionDist * collisionDist - perpDistSq);
+            if (dHit > 0 && dHit < closestDist) {
+              closestDist = dHit;
+              hitBall = b;
+            }
+          }
+        }
+
+        // 碰庫邊距離檢測
+        const boundX = TABLE_WIDTH / 2 - BALL_RADIUS;
+        const boundZ = TABLE_LENGTH / 2 - BALL_RADIUS;
+        if (dirX > 0) closestDist = Math.min(closestDist, (boundX - cueBall.x) / dirX);
+        if (dirX < 0) closestDist = Math.min(closestDist, (-boundX - cueBall.x) / dirX);
+        if (dirZ > 0) closestDist = Math.min(closestDist, (boundZ - cueBall.z) / dirZ);
+        if (dirZ < 0) closestDist = Math.min(closestDist, (-boundZ - cueBall.z) / dirZ);
+
+        const targetX = cueBall.x + dirX * closestDist;
+        const targetZ = cueBall.z + dirZ * closestDist;
+
+        // 更新射線頂點
+        const posAttr = this.aimLineGeo.attributes.position;
+        posAttr.setXYZ(0, cueBall.x, BALL_RADIUS, cueBall.z);
+        posAttr.setXYZ(1, targetX, BALL_RADIUS, targetZ);
+        posAttr.needsUpdate = true;
+        this.aimLine.computeLineDistances();
+
+        // 顯示幽靈球
+        if (hitBall) {
+          this.ghostBall.visible = true;
+          this.ghostBall.position.set(targetX, BALL_RADIUS, targetZ);
+        } else {
+          this.ghostBall.visible = false;
+        }
+      }
+    }
+
+    const cueStick = new CueStick();
+
+
+    /* ==========================================================================
+       8. 高性能 2.5D 連續碰撞物理更新循環 (Continuous Collision Detection)
+       ========================================================================== */
+    const SUB_STEPS = 4; // 每幀 4 次子步更新，徹底杜絕高速穿球/穿邊問題
+    let isBallsMoving = false;
+
+    function stepPhysics(frameDt) {
+      // 避免幀率忽快忽慢時物理爆炸，鎖定最大 dt
+      const clampedDt = Math.min(frameDt, 0.033);
+      const subDt = clampedDt / SUB_STEPS;
+
+      let anyMoving = false;
+
+      for (let step = 0; step < SUB_STEPS; step++) {
+        // 1. 各球位置推移
+        for (let i = 0; i < balls.length; i++) {
+          balls[i].updatePosition(subDt);
+          balls[i].applyFriction(Math.pow(ROLLING_FRICTION, subDt * 60));
+          if (!balls[i].isPocketed && Math.hypot(balls[i].vx, balls[i].vz) > 0) {
+            anyMoving = true;
+          }
+        }
+
+        // 2. 球與球彈性碰撞 (Ball to Ball CCD)
+        for (let i = 0; i < balls.length; i++) {
+          const b1 = balls[i];
+          if (b1.isPocketed) continue;
+
+          for (let j = i + 1; j < balls.length; j++) {
+            const b2 = balls[j];
+            if (b2.isPocketed) continue;
+
+            const dx = b2.x - b1.x;
+            const dz = b2.z - b1.z;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq < BALL_DIAMETER * BALL_DIAMETER && distSq > 0.000001) {
+              const dist = Math.sqrt(distSq);
+              const nx = dx / dist;
+              const nz = dz / dist;
+
+              // 重疊分離
+              const overlap = (BALL_DIAMETER - dist) * 0.5;
+              b1.x -= nx * overlap;
+              b1.z -= nz * overlap;
+              b2.x += nx * overlap;
+              b2.z += nz * overlap;
+
+              // 相對速度在法線方向投影
+              const kx = b1.vx - b2.vx;
+              const kz = b1.vz - b2.vz;
+              const p = 2 * (nx * kx + nz * kz) / 2; // 等質量球體
+
+              if (p > 0) {
+                b1.vx -= p * nx * BALL_RESTITUTION;
+                b1.vz -= p * nz * BALL_RESTITUTION;
+                b2.vx += p * nx * BALL_RESTITUTION;
+                b2.vz += p * nz * BALL_RESTITUTION;
+
+                // 記錄規則引擎的母球首擊
+                if (b1.id === 0 && !rules.firstHitBall) rules.firstHitBall = b2;
+                if (b2.id === 0 && !rules.firstHitBall) rules.firstHitBall = b1;
+
+                // 播放清脆碰撞音效
+                audio.playBallHit(p);
+              }
+            }
+          }
+        }
+
+        // 3. 庫邊碰撞 (Cushions)
+        const boundX = TABLE_WIDTH / 2 - BALL_RADIUS;
+        const boundZ = TABLE_LENGTH / 2 - BALL_RADIUS;
+
+        for (let i = 0; i < balls.length; i++) {
+          const b = balls[i];
+          if (b.isPocketed) continue;
+
+          let hitCushion = false;
+
+          // 左右庫邊 (過濾中袋位置)
+          if (Math.abs(b.z) > 0.08) {
+            if (b.x < -boundX) {
+              b.x = -boundX;
+              b.vx = -b.vx * CUSHION_RESTITUTION;
+              hitCushion = true;
+            } else if (b.x > boundX) {
+              b.x = boundX;
+              b.vx = -b.vx * CUSHION_RESTITUTION;
+              hitCushion = true;
+            }
+          }
+
+          // 前後頂底庫邊 (過濾角袋位置)
+          if (Math.abs(b.x) < boundX - 0.05) {
+            if (b.z < -boundZ) {
+              b.z = -boundZ;
+              b.vz = -b.vz * CUSHION_RESTITUTION;
+              hitCushion = true;
+            } else if (b.z > boundZ) {
+              b.z = boundZ;
+              b.vz = -b.vz * CUSHION_RESTITUTION;
+              hitCushion = true;
+            }
+          }
+
+          if (hitCushion) {
+            audio.playCushionHit(Math.hypot(b.vx, b.vz));
+            if (rules.firstHitBall) rules.cushionHitAfterBall = true;
+          }
+        }
+
+        // 4. 球袋落袋偵測 (Pockets)
+        for (let i = 0; i < balls.length; i++) {
+          const b = balls[i];
+          if (b.isPocketed) continue;
+
+          for (const p of POCKETS) {
+            const pdx = b.x - p.x;
+            const pdz = b.z - p.z;
+            if (pdx * pdx + pdz * pdz < POCKET_RADIUS * POCKET_RADIUS) {
+              // 成功進球！
+              b.isPocketed = true;
+              b.vx = 0;
+              b.vz = 0;
+              rules.pocketedThisTurn.push(b);
+              audio.playPocketSink();
+              renderPocketTray();
+              break;
+            }
+          }
+        }
+      }
+
+      // 檢查本回合球體是否完全靜止
+      if (isBallsMoving && !anyMoving) {
+        onAllBallsStopped();
+      }
+      isBallsMoving = anyMoving;
+    }
+
+    // 球體完全停妥時觸發規則結算
+    function onAllBallsStopped() {
+      const result = rules.evaluateTurn(balls);
+      updateHUD();
+
+      if (result.winner) {
+        showBanner(`🏆 獲勝！`, result.reason, 6000);
+      } else if (result.foul) {
+        showBanner(`⚠️ 犯規！`, result.reason, 3500);
+        document.getElementById('ball-in-hand-prompt').style.display = 'flex';
+        // 自由球：母球重置回發球線後中央
+        cueBall.reset(0, TABLE_LENGTH / 4);
+      } else {
+        if (result.reason) {
+          showBanner(`進球得分！`, result.reason, 2500);
+        }
+        document.getElementById('ball-in-hand-prompt').style.display = 'none';
+      }
+
+      // 準備下一桿
+      rules.firstHitBall = null;
+      rules.pocketedThisTurn = [];
+      rules.cushionHitAfterBall = false;
+    }
+
+
+    /* ==========================================================================
+       9. 擊球發射器 (Strike Action)
+       ========================================================================== */
+    function strikeCueBall(powerRatio) {
+      if (isBallsMoving || cueBall.isPocketed || rules.state === GAME_STATES.GAME_OVER) return;
+
+      audio.init();
+      const p = Math.min(Math.max(powerRatio, 0.1), 1.0);
+      const impulseSpeed = 0.6 + p * 3.4; // 衝擊速度
+
+      // 沿瞄準角度擊出母球
+      const dirX = Math.sin(cueStick.angle);
+      const dirZ = Math.cos(cueStick.angle);
+
+      cueBall.vx = dirX * impulseSpeed;
+      cueBall.vz = dirZ * impulseSpeed;
+
+      audio.playCueStrike(p);
+      isBallsMoving = true;
+      cueStick.pullDistance = 0;
+
+      // 重置拉桿力量 UI
+      setPowerUI(0);
+      document.getElementById('ball-in-hand-prompt').style.display = 'none';
+    }
+
+
+    /* ==========================================================================
+       10. AI 手勢辨識與體感握桿控制 (MediaPipe Hands - iPhone XR 專屬降載管線)
+       ========================================================================== */
+    const videoElement = document.getElementById('webcam-video');
+    const gestureCanvas = document.getElementById('gesture-canvas');
+    const gCtx = gestureCanvas.getContext('2d');
+
+    let isAiMode = true;
+    let currentFacingMode = 'environment';
+    let cameraInstance = null;
+
+    // MediaPipe Lite 模型 (modelComplexity = 0)
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 0, // Lite 模型，iPhone XR 零壓力
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    // 手勢追蹤狀態與防抖動平滑
+    let isPinching = false;
+    let pinchStartPos = { x: 0, y: 0 };
+    let currentGesturePower = 0;
+    let targetAngle = 0;
+
+    hands.onResults((results) => {
+      // 快速清空骨架 Canvas
+      gCtx.clearRect(0, 0, gestureCanvas.width, gestureCanvas.height);
+
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        document.getElementById('gesture-dot').style.background = '#64748b';
+        document.getElementById('gesture-text').innerText = '未偵測到手部 (可改用觸控滑桿)';
+        if (isPinching) {
+          isPinching = false;
+          setPowerUI(0);
+        }
+        return;
+      }
+
+      const landmarks = results.multiHandLandmarks[0];
+      const thumbTip = landmarks[4];
+      const indexTip = landmarks[8];
+      const wrist = landmarks[0];
+
+      // 繪製極簡手勢節點 (iPhone XR 減少繪製開銷)
+      const w = gestureCanvas.width;
+      const h = gestureCanvas.height;
+      const tx = thumbTip.x * w;
+      const ty = thumbTip.y * h;
+      const ix = indexTip.x * w;
+      const iy = indexTip.y * h;
+
+      gCtx.fillStyle = '#38ef7d';
+      gCtx.beginPath();
+      gCtx.arc(ix, iy, 8, 0, Math.PI * 2);
+      gCtx.arc(tx, ty, 8, 0, Math.PI * 2);
+      gCtx.fill();
+
+      // 計算拇指與食指間距 (正規化螢幕距離)
+      const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+      const isPinchedNow = pinchDist < 0.085;
+
+      const dotEl = document.getElementById('gesture-dot');
+      const textEl = document.getElementById('gesture-text');
+
+      if (isPinchedNow) {
+        dotEl.style.background = '#f59e0b';
+        textEl.innerText = '👌 捏合握桿蓄力中... (往後拉增加力道，推/放桿擊球)';
+
+        if (!isPinching) {
+          // 捏合瞬間進入拉桿模式
+          isPinching = true;
+          pinchStartPos = { x: (thumbTip.x + indexTip.x) / 2, y: (thumbTip.y + indexTip.y) / 2 };
+        } else {
+          // 向後/向下位移計算蓄力比例
+          const curY = (thumbTip.y + indexTip.y) / 2;
+          const pullDy = curY - pinchStartPos.y; // 向下滑動為蓄力
+          currentGesturePower = Math.min(Math.max(pullDy * 3.5, 0), 1.0);
+          cueStick.pullDistance = currentGesturePower * 0.16; // 桿身後拉
+          setPowerUI(currentGesturePower);
+        }
+      } else {
+        // 未捏合狀態：平滑旋轉瞄準球桿
+        if (isPinching) {
+          // 剛剛鬆手：觸發擊球！
+          isPinching = false;
+          if (currentGesturePower > 0.12) {
+            strikeCueBall(currentGesturePower);
+          }
+          currentGesturePower = 0;
+          setPowerUI(0);
+        }
+
+        dotEl.style.background = '#38ef7d';
+        textEl.innerText = '🖐️ 瞄準模式：移動手部旋轉瞄準，捏合大拇指與食指握桿';
+
+        // 依手腕到食指方向平滑計算瞄準角度
+        const dirX = indexTip.x - wrist.x;
+        const dirY = indexTip.y - wrist.y;
+        targetAngle = Math.atan2(dirX, -dirY);
+      }
+    });
+
+    // iPhone XR 專屬防發燙降頻節流管線：AI 偵測節流至 ~22 FPS，主畫面依然穩 60 FPS
+    let isAiInferring = false;
+    let lastAiTime = 0;
+
+    function startWebcam(facingMode = 'environment') {
+      currentFacingMode = facingMode;
+      videoElement.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
+      if (cameraInstance) {
+        cameraInstance.stop();
+      }
+
+      cameraInstance = new Camera(videoElement, {
+        onFrame: async () => {
+          const now = performance.now();
+          if (isAiInferring || (now - lastAiTime < 45)) return; // 節流間隔 45ms (~22FPS)
+          isAiInferring = true;
+          lastAiTime = now;
+          try {
+            await hands.send({ image: videoElement });
+          } catch (e) {
+            console.warn('AI frame drop:', e);
+          } finally {
+            isAiInferring = false;
+          }
+        },
+        width: { ideal: 480 },  // 輕量化解析度，避免 1080p 造成 A12 晶片過熱
+        height: { ideal: 360 },
+        facingMode: facingMode
+      });
+
+      cameraInstance.start();
+    }
+
+
+    /* ==========================================================================
+       11. 觸控與 UI 互動控制器 (Touch / Mouse Fallback)
+       ========================================================================== */
+    const angleSlider = document.getElementById('angle-slider');
+    const powerMeter = document.getElementById('power-meter-container');
+    const shootBtn = document.getElementById('shoot-btn');
+
+    let touchPower = 0;
+    let isDraggingPower = false;
+
+    // 滑動調節角度
+    angleSlider.addEventListener('input', (e) => {
+      const deg = parseFloat(e.target.value);
+      cueStick.angle = (deg * Math.PI) / 180;
+    });
+
+    // 觸控蓄力拉桿
+    function handlePowerInput(clientX) {
+      const rect = powerMeter.getBoundingClientRect();
+      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1.0);
+      touchPower = ratio;
+      cueStick.pullDistance = touchPower * 0.16;
+      setPowerUI(touchPower);
+    }
+
+    powerMeter.addEventListener('pointerdown', (e) => {
+      isDraggingPower = true;
+      powerMeter.setPointerCapture(e.pointerId);
+      handlePowerInput(e.clientX);
+    });
+
+    powerMeter.addEventListener('pointermove', (e) => {
+      if (isDraggingPower) handlePowerInput(e.clientX);
+    });
+
+    powerMeter.addEventListener('pointerup', () => {
+      isDraggingPower = false;
+    });
+
+    // 點擊擊球按鈕
+    shootBtn.addEventListener('click', () => {
+      const p = touchPower > 0.05 ? touchPower : 0.65;
+      strikeCueBall(p);
+      touchPower = 0;
+      setPowerUI(0);
+    });
+
+    function setPowerUI(ratio) {
+      const percent = Math.round(ratio * 100);
+      document.getElementById('power-fill').style.width = `${percent}%`;
+      document.getElementById('power-label').innerText = `蓄力 ${percent}%`;
+    }
+
+    // 自由球拖曳母球 (Ball in Hand)
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDraggingCueBall = false;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (rules.state !== GAME_STATES.BALL_IN_HAND) return;
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObject(cueBall.mesh);
+      if (intersects.length > 0) {
+        isDraggingCueBall = true;
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDraggingCueBall || rules.state !== GAME_STATES.BALL_IN_HAND) return;
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      // 投影到球桌檯面 (y = BALL_RADIUS)
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BALL_RADIUS);
+      const intersection = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersection);
+
+      if (intersection) {
+        // 將世界座標轉為 tableGroup 局部座標
+        const localPos = tableGroup.worldToLocal(intersection.clone());
+        const boundX = TABLE_WIDTH / 2 - BALL_RADIUS * 1.5;
+        const boundZ = TABLE_LENGTH / 2 - BALL_RADIUS * 1.5;
+
+        cueBall.x = Math.min(Math.max(localPos.x, -boundX), boundX);
+        cueBall.z = Math.min(Math.max(localPos.z, -boundZ), boundZ);
+        cueBall.mesh.position.set(cueBall.x, BALL_RADIUS, cueBall.z);
+        cueBall.shadow.position.set(cueBall.x, 0.001, cueBall.z);
+      }
+    });
+
+    canvas.addEventListener('pointerup', () => {
+      if (isDraggingCueBall) {
+        isDraggingCueBall = false;
+        rules.state = GAME_STATES.AIMING;
+        document.getElementById('ball-in-hand-prompt').style.display = 'none';
+      }
+    });
+
+
+    /* ==========================================================================
+       12. AR 球桌校準面板與 UI 按鈕事件
+       ========================================================================== */
+    const arModal = document.getElementById('ar-settings-modal');
+    const arConfigBtn = document.getElementById('ar-config-btn');
+    const cameraFlipBtn = document.getElementById('camera-flip-btn');
+    const modeToggleBtn = document.getElementById('mode-toggle-btn');
+    const resetGameBtn = document.getElementById('reset-game-btn');
+
+    arConfigBtn.addEventListener('click', () => {
+      arModal.style.display = arModal.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    document.getElementById('cfg-close-btn').addEventListener('click', () => {
+      arModal.style.display = 'none';
+    });
+
+    // 縮放
+    document.getElementById('cfg-scale').addEventListener('input', (e) => {
+      arConfig.scale = parseFloat(e.target.value);
+      document.getElementById('val-scale').innerText = `${arConfig.scale.toFixed(2)}x`;
+      updateTableTransform();
+    });
+
+    // 高度
+    document.getElementById('cfg-height').addEventListener('input', (e) => {
+      arConfig.posY = parseFloat(e.target.value);
+      document.getElementById('val-height').innerText = `${arConfig.posY.toFixed(2)}m`;
+      updateTableTransform();
+    });
+
+    // 距離
+    document.getElementById('cfg-dist').addEventListener('input', (e) => {
+      arConfig.posZ = -parseFloat(e.target.value) + 1.2;
+      document.getElementById('val-dist').innerText = `${e.target.value}m`;
+      updateTableTransform();
+    });
+
+    // 旋轉
+    document.getElementById('cfg-rot').addEventListener('input', (e) => {
+      arConfig.rotY = parseFloat(e.target.value) * (Math.PI / 180);
+      document.getElementById('val-rot').innerText = `${e.target.value}°`;
+      updateTableTransform();
+    });
+
+    // 仰角
+    document.getElementById('cfg-pitch').addEventListener('input', (e) => {
+      arConfig.pitch = parseFloat(e.target.value) * (Math.PI / 180);
+      document.getElementById('val-pitch').innerText = `${e.target.value}°`;
+      updateTableTransform();
+    });
+
+    // 恢復預設
+    document.getElementById('cfg-reset-btn').addEventListener('click', () => {
+      arConfig.scale = 0.55;
+      arConfig.posY = -0.25;
+      arConfig.posZ = -0.2;
+      arConfig.rotY = 0;
+      arConfig.pitch = 15 * (Math.PI / 180);
+
+      document.getElementById('cfg-scale').value = 0.55;
+      document.getElementById('cfg-height').value = -0.25;
+      document.getElementById('cfg-dist').value = 1.4;
+      document.getElementById('cfg-rot').value = 0;
+      document.getElementById('cfg-pitch').value = 15;
+
+      document.getElementById('val-scale').innerText = '0.55x';
+      document.getElementById('val-height').innerText = '-0.25m';
+      document.getElementById('val-dist').innerText = '1.4m';
+      document.getElementById('val-rot').innerText = '0°';
+      document.getElementById('val-pitch').innerText = '15°';
+
+      updateTableTransform();
+    });
+
+    // 切換前後鏡頭
+    cameraFlipBtn.addEventListener('click', () => {
+      currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+      startWebcam(currentFacingMode);
+    });
+
+    // 切換 AI 手勢 / 純觸控模式
+    modeToggleBtn.addEventListener('click', () => {
+      isAiMode = !isAiMode;
+      modeToggleBtn.innerText = isAiMode ? '🖐️' : '👆';
+      document.getElementById('gesture-pill').style.display = isAiMode ? 'flex' : 'none';
+      gestureCanvas.style.display = isAiMode ? 'block' : 'none';
+    });
+
+    // 重新開局
+    resetGameBtn.addEventListener('click', () => {
+      if (confirm('確定要重新擺球開局嗎？')) {
+        setupRack();
+        showBanner('重新開局', '開球局，祝您一桿進洞！', 2500);
+      }
+    });
+
+    // HUD 橫幅提示
+    let bannerTimer = null;
+    function showBanner(title, desc, duration = 3000) {
+      const banner = document.getElementById('center-banner');
+      document.getElementById('banner-title').innerText = title;
+      document.getElementById('banner-desc').innerText = desc;
+      banner.classList.add('show');
+
+      if (bannerTimer) clearTimeout(bannerTimer);
+      bannerTimer = setTimeout(() => {
+        banner.classList.remove('show');
+      }, duration);
+    }
+
+    // 更新 HUD 資訊
+    function updateHUD() {
+      const playerLabel = document.getElementById('player-label');
+      playerLabel.innerText = `玩家 ${rules.currentPlayer} 擊球`;
+
+      const group = rules.playerGroups[rules.currentPlayer];
+      const targetLabel = document.getElementById('target-group-label');
+      if (!group) {
+        targetLabel.innerText = '球組：尚未選定 (Open)';
+      } else {
+        targetLabel.innerText = group === 'SOLID' ? '球組：全色球 (1-7)' : '球組：花球 (9-15)';
+      }
+    }
+
+    // 繪製落袋展示托盤
+    function renderPocketTray() {
+      const tray = document.getElementById('balls-tray');
+      tray.innerHTML = '';
+      balls.forEach(b => {
+        if (b.isPocketed && b.id !== 0) {
+          const chip = document.createElement('div');
+          chip.className = 'tray-ball-chip';
+          chip.innerText = b.id;
+          chip.style.backgroundColor = BALL_COLORS[b.id] || '#fff';
+          if (b.id > 8) {
+            chip.style.border = '2px dashed #ffffff';
+          }
+          tray.appendChild(chip);
+        }
+      });
+    }
+
+
+    /* ==========================================================================
+       13. 主渲染與插值循環 (60 FPS Smooth Render Loop)
+       ========================================================================== */
+    let lastClock = performance.now();
+
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+
+      const now = performance.now();
+      const dt = (now - lastClock) / 1000;
+      lastClock = now;
+
+      // 1. 執行物理子步演算
+      stepPhysics(dt);
+
+      // 2. AI 手勢角度平滑插值 (Lerp)，即便 AI 運行在 22FPS，視覺依然維持極致 60FPS
+      if (isAiMode && !isPinching) {
+        // 短路徑插值角度
+        let diff = targetAngle - cueStick.angle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        cueStick.angle += diff * 0.18;
+
+        // 同步底端角度滑桿值
+        let deg = (cueStick.angle * 180 / Math.PI) % 360;
+        if (deg < 0) deg += 360;
+        angleSlider.value = deg;
+      }
+
+      // 3. 更新虛擬球桿與預測瞄準線
+      cueStick.update(cueBall, isBallsMoving);
+
+      // 4. WebGL 渲染
+      renderer.render(scene, camera);
+    }
+
+    // 視窗大小改變自我調整
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      gestureCanvas.width = window.innerWidth;
+      gestureCanvas.height = window.innerHeight;
+    });
+
+
+    /* ==========================================================================
+       14. 遊戲點擊啟動入口
+       ========================================================================== */
+    document.getElementById('enter-game-btn').addEventListener('click', () => {
+      // 1. 解鎖 Web Audio
+      audio.init();
+
+      // 2. 初始化手勢 Canvas 尺寸
+      gestureCanvas.width = window.innerWidth;
+      gestureCanvas.height = window.innerHeight;
+
+      // 3. 啟動鏡頭與 MediaPipe
+      startWebcam(currentFacingMode);
+
+      // 4. 初始化排球與物理
+      setupRack();
+
+      // 5. 啟動主渲染循環
+      renderLoop();
+
+      // 6. 隱藏遮罩
+      document.getElementById('start-overlay').style.display = 'none';
+      showBanner('🎱 歡迎來到 AR 撞球', '請將球桌平移至書桌或地板，開始享受推桿！', 3500);
+    });
+  </script>
+</body>
 </html>
